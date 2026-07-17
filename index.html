@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#121213">
+<title>FRIENDLE — wordle with friends, as a battle</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23121213'/><rect x='14' y='14' width='32' height='32' rx='6' fill='%2358f26f'/><rect x='54' y='14' width='32' height='32' rx='6' fill='%23f2d558'/><rect x='14' y='54' width='32' height='32' rx='6' fill='%23f258d5'/><rect x='54' y='54' width='32' height='32' rx='6' fill='%233a3a3c'/></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="bg-trip" aria-hidden="true"></div>
+<div id="app">
+
+  <!-- ============ MAIN MENU ============ -->
+  <section id="scr-menu" class="screen">
+    <h1 class="big-title" aria-label="FRIENDLE"></h1>
+    <p class="tagline">wordle with friends. as a battle.</p>
+    <div class="menu-box">
+      <input id="inp-name" maxlength="12" autocomplete="off" spellcheck="false" placeholder="YOUR NAME" aria-label="Your name">
+      <button id="btn-host" class="btn-big rainbow-btn">HOST GAME</button>
+      <div class="join-row">
+        <input id="inp-code" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE" aria-label="Room code">
+        <button id="btn-join" class="btn-big">JOIN</button>
+      </div>
+    </div>
+    <div class="menu-foot">
+      <button id="btn-sound" class="btn-ghost" aria-live="polite">🔊 SOUND ON</button>
+      <button id="btn-help-menu" class="btn-ghost">❓ HOW TO PLAY</button>
+    </div>
+    <p class="credits">no accounts · no downloads · rooms live while the host stays</p>
+  </section>
+
+  <!-- ============ CONNECTING ============ -->
+  <section id="scr-connect" class="screen hidden">
+    <div class="spinner" aria-hidden="true"></div>
+    <p id="connect-msg">connecting…</p>
+    <button id="btn-connect-back" class="btn-ghost">← BACK</button>
+  </section>
+
+  <!-- ============ LOBBY ============ -->
+  <section id="scr-lobby" class="screen hidden">
+    <h2 class="room-label">ROOM</h2>
+    <div id="room-code" class="room-code" title="room code"></div>
+    <button id="btn-share" class="btn-ghost">🔗 COPY INVITE LINK</button>
+    <ul id="lobby-players" class="lobby-players"></ul>
+    <div id="lobby-settings" class="lobby-settings">
+      <div class="setting" id="set-mode">
+        <span class="setting-label">MODE</span>
+        <div class="seg" role="radiogroup" data-setting="mode">
+          <button data-val="classic" class="seg-btn">CLASSIC</button>
+          <button data-val="royale" class="seg-btn">ROYALE ∞</button>
+          <button data-val="friend" class="seg-btn">FRIEND 💗</button>
+        </div>
+      </div>
+      <div class="setting" id="set-words">
+        <span class="setting-label">WORDS</span>
+        <div class="seg" role="radiogroup" data-setting="words">
+          <button data-val="3" class="seg-btn">3</button>
+          <button data-val="5" class="seg-btn">5</button>
+          <button data-val="10" class="seg-btn">10</button>
+        </div>
+      </div>
+      <div class="setting hidden" id="set-ante">
+        <span class="setting-label">ANTE</span>
+        <div class="seg" role="radiogroup" data-setting="ante">
+          <button data-val="25" class="seg-btn">25</button>
+          <button data-val="50" class="seg-btn">50</button>
+          <button data-val="100" class="seg-btn">100</button>
+        </div>
+      </div>
+      <div class="setting" id="set-timer">
+        <span class="setting-label">TIMER</span>
+        <div class="seg" role="radiogroup" data-setting="timerMs">
+          <button data-val="0" class="seg-btn">NONE</button>
+          <button data-val="60000" class="seg-btn">60s</button>
+          <button data-val="90000" class="seg-btn">90s</button>
+          <button data-val="120000" class="seg-btn">2min</button>
+        </div>
+      </div>
+      <p id="mode-blurb" class="mode-blurb"></p>
+    </div>
+    <button id="btn-start" class="btn-big rainbow-btn" disabled>START</button>
+    <p id="lobby-wait" class="lobby-wait hidden">waiting for the host to start…</p>
+    <div class="row-gap">
+      <button id="btn-lobby-help" class="btn-ghost">❓ HELP</button>
+      <button id="btn-lobby-quit" class="btn-ghost">✕ LEAVE</button>
+    </div>
+  </section>
+
+  <!-- ============ GAME ============ -->
+  <section id="scr-game" class="screen hidden">
+    <header class="game-header">
+      <div id="hdr-round" class="hdr-round"></div>
+      <div id="hdr-pot" class="hdr-pot hidden"></div>
+      <div id="hdr-timer" class="hdr-timer hidden"></div>
+      <div class="hdr-btns">
+        <button id="btn-pause" class="icon-btn" title="Pause (privacy screen)">⏸</button>
+        <button id="btn-help" class="icon-btn" title="How to play">?</button>
+        <button id="btn-quit" class="icon-btn" title="Quit to menu">✕</button>
+      </div>
+    </header>
+
+    <div id="players-strip" class="players-strip"></div>
+
+    <main class="game-main" id="game-main">
+      <div id="opponents" class="opponents"></div>
+      <div class="board-wrap">
+        <div id="setter-banner" class="setter-banner hidden"></div>
+        <div id="board" class="board" aria-label="your guess grid"></div>
+        <div id="countdown" class="countdown hidden" aria-hidden="true"></div>
+        <div id="freeze-overlay" class="freeze-overlay hidden">🧊<span id="freeze-secs"></span></div>
+      </div>
+    </main>
+
+    <!-- in-flow panels that replace the main area but keep the keyboard usable -->
+    <div id="setter-panel" class="game-panel hidden">
+      <h2>😈 YOU SET THE WORD</h2>
+      <p>Type any real 5-letter word — keep your screen private!<br>Everyone else will race to guess it.</p>
+      <div id="setter-row" class="board setter-row"></div>
+      <p class="setter-tip">type, then ENTER</p>
+    </div>
+    <div id="duel-panel" class="game-panel hidden">
+      <h2 id="duel-title">⚔️ DUEL</h2>
+      <p id="duel-sub"></p>
+      <div id="duel-board" class="board duel-board"></div>
+      <p id="duel-turn"></p>
+      <div id="duel-result" class="duel-result hidden"></div>
+    </div>
+
+    <div id="shop" class="shop hidden"></div>
+    <div id="keyboard" class="keyboard" aria-label="on-screen keyboard"></div>
+  </section>
+
+  <!-- ============ GAME OVER ============ -->
+  <section id="scr-over" class="screen hidden">
+    <h2 id="over-title" class="over-title"></h2>
+    <ol id="standings" class="standings"></ol>
+    <button id="btn-again" class="btn-big rainbow-btn hidden">PLAY AGAIN</button>
+    <p id="over-wait" class="lobby-wait hidden">the host can start a rematch…</p>
+    <button id="btn-over-menu" class="btn-ghost">← BACK TO MENU</button>
+  </section>
+
+  <!-- ============ ROOM DEAD / FATAL ============ -->
+  <section id="scr-dead" class="screen hidden">
+    <h2>💀</h2>
+    <p id="dead-msg"></p>
+    <button id="btn-dead-menu" class="btn-big">← BACK TO MENU</button>
+  </section>
+
+  <!-- ============ OVERLAYS ============ -->
+  <div id="ovl-pause" class="overlay opaque hidden">
+    <h2>PAUSED</h2>
+    <p>your screen is hidden — the game clock keeps running for everyone else!</p>
+    <button id="btn-resume" class="btn-big rainbow-btn">RESUME</button>
+  </div>
+
+  <div id="ovl-help" class="overlay hidden">
+    <div class="help-card">
+      <h2>HOW TO PLAY</h2>
+      <p>Everyone gets the <b>same hidden 5-letter word</b> and 6 guesses.
+      <span class="tile-demo g">A</span> right letter, right spot ·
+      <span class="tile-demo y">B</span> right letter, wrong spot ·
+      <span class="tile-demo x">C</span> not in the word.
+      You see rivals' grids live — <b>colors only, never letters</b>. Solve first for the big points!</p>
+      <h3>CLASSIC</h3>
+      <p>Host picks 3 / 5 / 10 words. First solver gets full points (base + speed + fewer-guess bonus), later solvers get a cut. Most points wins.</p>
+      <h3>ROYALE ∞</h3>
+      <p>Everyone starts with 1000 points. Each word, every survivor antes into a pot — the first solver takes it all (unsolved pots roll over and grow). Hit 0 and you're out, spectating. Last player standing wins.</p>
+      <h3>FRIEND 💗</h3>
+      <p>One player is the <b>setter</b> and secretly types their own word; everyone else races to guess it while the setter watches. Nobody solves it? The setter scores! The setter role rotates every word. No shop — it's pure.</p>
+      <h3>POWER-UP SHOP <small>(Classic &amp; Royale)</small></h3>
+      <p>🔍 <b>Peek 75</b> — see one real letter of a rival's latest guess<br>
+      🧊 <b>Freeze 100</b> — lock rivals' keyboards for 5s<br>
+      💡 <b>Hint 75</b> — reveal a green letter in your grid<br>
+      🗑️ <b>Smudge 100</b> — un-gray a letter on a rival's keyboard<br>
+      ⚔️ <b>Duel (stake 0–200)</b> — Royale only: alternate guesses with a foe on a fresh word; loser pays, bust = out.</p>
+      <button id="btn-help-close" class="btn-big">GOT IT</button>
+    </div>
+  </div>
+
+  <div id="ovl-reveal" class="overlay hidden">
+    <div class="reveal-card">
+      <p id="reveal-label"></p>
+      <div id="reveal-word" class="reveal-word"></div>
+      <div id="reveal-scores"></div>
+      <p id="reveal-pot" class="hidden"></p>
+    </div>
+  </div>
+
+  <div id="ovl-picker" class="overlay hidden">
+    <div class="picker-card">
+      <h2 id="picker-title"></h2>
+      <div id="picker-targets"></div>
+      <div id="picker-stake" class="hidden">
+        <label>STAKE <output id="stake-out">100</output></label>
+        <input id="stake-range" type="range" min="0" max="200" step="25" value="100">
+      </div>
+      <div class="row-gap">
+        <button id="btn-picker-go" class="btn-big rainbow-btn" disabled>GO</button>
+        <button id="btn-picker-cancel" class="btn-ghost">CANCEL</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+</div>
+
+<script src="vendor/supabase.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
