@@ -146,7 +146,18 @@ resume` with the word timer suspended.
    exists. Don't introduce absolute `/paths`.
 8. **Room codes** use an alphabet without O/0/I/1. Keep it that way; support
    tickets about `O` vs `0` are self-inflicted.
-9. **The dreaded stalled round**: a round only finishes when every guesser is
+9. **Presence is late, sparse, and only fires on change.** Two corollaries,
+   both of which shipped as "the second player keeps getting kicked":
+   (a) anything that watches presence must get the CURRENT roster replayed on
+   attach — `onPresence(cb)` in both transports does this; a watcher that
+   starts from an empty set concludes everyone left; (b) never start a
+   kicked-for-absence clock on a peer that has not been CONFIRMED present at
+   least once (`engine.everSeen`, `seenHost` in the watchdog) — a joiner's
+   broadcast regularly outruns their presence registration. Also, any live
+   intent from a "disconnected" player reinstates them with a resync, and
+   `LEAVE_GRACE_MS` is deliberately roomy (8 s) because phone radios flap.
+   tests/stability.spec.js is the regression test.
+10. **The dreaded stalled round**: a round only finishes when every guesser is
    `done`. Any new way for a player to stop guessing (new power-up, new
    status) must either mark them done or exclude them from `guessers()`, or
    the game hangs — the leave/timeout/elimination paths all do this.

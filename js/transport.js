@@ -27,6 +27,7 @@ export class LocalTransport {
     this.msgCbs = [];
     this.presCbs = [];
     this.peers = new Map(); // id -> lastSeen
+    this.present = new Set();
     this.lastHb = 0;
   }
 
@@ -65,13 +66,16 @@ export class LocalTransport {
   }
 
   _firePresence() {
-    const present = new Set(this.peers.keys());
-    for (const cb of this.presCbs) cb(present);
+    this.present = new Set(this.peers.keys());
+    for (const cb of this.presCbs) cb(new Set(this.present));
   }
 
   send(payload) { try { this.bc.postMessage(payload); } catch { /* channel closed */ } }
   onMessage(cb) { this.msgCbs.push(cb); }
-  onPresence(cb) { this.presCbs.push(cb); }
+  // Presence callbacks get the CURRENT roster immediately - presence only
+  // changes on churn, and a late subscriber must not start from an empty set
+  // (that exact bug made guests think the host had vanished).
+  onPresence(cb) { this.presCbs.push(cb); cb(new Set(this.present)); }
 
   async leave() {
     clearInterval(this._hbTimer);
@@ -87,6 +91,7 @@ export class SupabaseTransport {
     this.self = self;
     this.msgCbs = [];
     this.presCbs = [];
+    this.present = new Set();
   }
 
   async connect() {
@@ -106,9 +111,9 @@ export class SupabaseTransport {
     });
     const sync = () => {
       const state = this.channel.presenceState();
-      const present = new Set(Object.keys(state));
-      present.delete(this.self.id);
-      for (const cb of this.presCbs) cb(present);
+      this.present = new Set(Object.keys(state));
+      this.present.delete(this.self.id);
+      for (const cb of this.presCbs) cb(new Set(this.present));
     };
     this.channel.on('presence', { event: 'sync' }, sync);
     this.channel.on('presence', { event: 'join' }, sync);
@@ -133,7 +138,9 @@ export class SupabaseTransport {
     this.channel.send({ type: 'broadcast', event: EVENT_NAME, payload });
   }
   onMessage(cb) { this.msgCbs.push(cb); }
-  onPresence(cb) { this.presCbs.push(cb); }
+  // Replay the current roster on attach - Supabase emits its initial presence
+  // sync during connect(), before most listeners exist.
+  onPresence(cb) { this.presCbs.push(cb); cb(new Set(this.present)); }
 
   async leave() {
     try { await this.channel.unsubscribe(); } catch { /* already gone */ }

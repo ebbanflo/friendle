@@ -31,6 +31,7 @@ export class Engine {
     this.duel = null;
     this.frozenUntil = {};
     this.missingSince = new Map();
+    this.everSeen = new Set(); // peers confirmed via presence at least once
     this.timers = {};
     this.setterCursor = -1;
 
@@ -45,6 +46,18 @@ export class Engine {
     net.on(IN.RESYNC, (_d, from) => this.sendResync(from));
 
     net.transport.onPresence((present) => this.onPresence(present));
+    // A live intent from a "disconnected" player proves they're back (their
+    // socket blipped, presence lagged, phone woke up) - reinstate + resync.
+    net.onAny((env) => {
+      if (!env || env.t === IN.QUIT) return;
+      const p = this.player(env.from);
+      if (p && !p.connected && this.started && !this.over) {
+        p.connected = true;
+        this.missingSince.delete(p.id);
+        this.broadcastLobby(); // roster refresh; guests keep their game screens
+        this.sendResync(p.id);
+      }
+    });
     this._sweep = setInterval(() => this.sweepMissing(), 1000);
   }
 
@@ -600,12 +613,15 @@ export class Engine {
 
   // ---------- presence / leaving ----------
   onPresence(present) {
+    for (const id of present) this.everSeen.add(id);
     for (const p of this.players) {
       if (p.id === this.hostId) continue;
       if (present.has(p.id)) {
         this.missingSince.delete(p.id);
         if (!p.connected && !this.started) { p.connected = true; this.broadcastLobby(); }
-      } else if (p.connected && !this.missingSince.has(p.id)) {
+      } else if (p.connected && this.everSeen.has(p.id) && !this.missingSince.has(p.id)) {
+        // Only players once CONFIRMED present can go missing - a joiner whose
+        // broadcast outran their presence registration must not be kicked.
         this.missingSince.set(p.id, now());
       }
     }

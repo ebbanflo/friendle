@@ -88,15 +88,20 @@ async function joinGame(codeRaw, name) {
 }
 
 // Guests: if the host's presence vanishes and stays gone, the room is dead.
+// The missing-clock may only start AFTER the host has been seen present at
+// least once - starting from an empty pre-sync roster used to kick perfectly
+// healthy guests a few seconds after joining.
 function startHostWatchdog() {
   let present = new Set();
+  let seenHost = false;
   S.transport.onPresence((p) => { present = p; });
   S.watchdog = setInterval(() => {
     const m = S.mirror;
     if (!m || m.roomDead || !m.hostId || m.isHost()) return;
     if (present.has(m.hostId)) {
+      seenHost = true;
       S.hostMissingSince = 0;
-    } else {
+    } else if (seenHost) {
       if (!S.hostMissingSince) S.hostMissingSince = now();
       else if (now() - S.hostMissingSince > LEAVE_GRACE_MS) {
         clearInterval(S.watchdog);

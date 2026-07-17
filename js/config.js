@@ -63,7 +63,9 @@ export const PLAYER_COLORS = ['#ff4fd8', '#3ddcff', '#a6ff4f', '#ffb84f'];
 // Presence timing (transport-level).
 export const HEARTBEAT_MS = 800;       // LocalTransport heartbeat
 export const PRESENCE_TIMEOUT_MS = 2600;
-export const LEAVE_GRACE_MS = 4500;    // gone this long = treated as quit
+export const LEAVE_GRACE_MS = 8000;    // gone this long = treated as quit
+                                       // (roomy: phone locks and radio blips
+                                       //  make presence flap for seconds)
 
 export const ERR_NAPPING =
   'The server is napping \u{1F634} — the owner can wake it in the Supabase dashboard.';
