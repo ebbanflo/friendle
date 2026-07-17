@@ -1,0 +1,19 @@
+{
+  "name": "friendle",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FRIENDLE — wordle with friends, as a battle. Static site; this package.json exists only for the Playwright E2E suite.",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ebbanflo/friendle"
+  },
+  "scripts": {
+    "serve": "python3 -m http.server 4173 --bind 127.0.0.1",
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
+}
