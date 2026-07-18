@@ -10,10 +10,11 @@
 import {
   MAX_PLAYERS, MIN_PLAYERS, MAX_ROWS, GRACE_MS, COUNTDOWN_MS, TIMER_SLACK_MS,
   SCORING, ROYALE, SHOP, FREEZE_MS, DEFAULT_SETTINGS, PLAYER_COLORS, LEAVE_GRACE_MS,
+  REACTIONS, REACT_COOLDOWN_MS,
 } from './config.js';
 import { EV, IN } from './protocol.js';
 import { pickWord, scoreGuess, isValidGuess } from './words.js';
-import { deobf, now } from './util.js';
+import { obf, deobf, now } from './util.js';
 
 const SET_TIMEOUT_MS = 75000; // FRIEND: setter stalls -> rotate onward
 
@@ -42,6 +43,7 @@ export class Engine {
     net.on(IN.SECRET, (d, from) => this.onSecret(d, from));
     net.on(IN.BUY, (d, from) => this.onBuy(d, from));
     net.on(IN.DUEL_GUESS, (d, from) => this.onDuelGuess(d, from));
+    net.on(IN.REACT, (d, from) => this.onReact(d, from));
     net.on(IN.QUIT, (_d, from) => this.onLeave(from, 'quit'));
     net.on(IN.RESYNC, (_d, from) => this.sendResync(from));
 
@@ -292,7 +294,7 @@ export class Engine {
       this.net.emit(EV.BAD_GUESS, { to: from, no: r.no, reason: 'frozen' });
       return;
     }
-    const word = String(d.word || '').toLowerCase();
+    const word = this.unwrapWord(d.x);
     if (!isValidGuess(word)) {
       this.net.emit(EV.BAD_GUESS, { to: from, no: r.no, reason: 'invalid' });
       return;
@@ -307,6 +309,12 @@ export class Engine {
     this.net.emit(EV.RESULT, {
       pid: from, no: r.no, row: rows.length - 1, colors, solved, done,
     });
+    // FRIEND: the setter isn't competing - they get the actual letters, live.
+    if (this.settings.mode === 'friend' && r.setterId && r.setterId !== from) {
+      this.net.emit(EV.SETTER_LETTERS, {
+        to: r.setterId, pid: from, no: r.no, row: rows.length - 1, x: obf(word, this.code),
+      });
+    }
 
     if (solved) this.recordSolve(from, rows.length - 1, Number(d.elapsed) || 0);
     else this.maybeFinishRound();
@@ -545,10 +553,27 @@ export class Engine {
     this.net.emit(EV.DUEL_START, { a: a.id, b: b.id, stake });
   }
 
+  // Guess words travel lightly obfuscated (like the FRIEND secret) so rival
+  // guesses aren't casual network-tab reading. Not cryptography.
+  unwrapWord(x) {
+    try { return deobf(x, this.code).toLowerCase(); } catch { return ''; }
+  }
+
+  // FRIEND: the setter heckles a guesser with an emoji; host validates + relays.
+  onReact(d, from) {
+    const r = this.round;
+    if (this.settings.mode !== 'friend' || !r || r.phase !== 'play' || this.over) return;
+    if (from !== r.setterId || !REACTIONS.includes(d.emoji)) return;
+    if (!this.player(d.target) || d.target === from) return;
+    if (now() - (this.lastReactAt || 0) < REACT_COOLDOWN_MS) return;
+    this.lastReactAt = now();
+    this.net.emit(EV.REACTION, { from, target: d.target, emoji: d.emoji });
+  }
+
   onDuelGuess(d, from) {
     const duel = this.duel;
     if (!duel || duel.over || from !== duel.turn) return;
-    const word = String(d.word || '').toLowerCase();
+    const word = this.unwrapWord(d.x);
     if (!isValidGuess(word)) {
       this.net.emit(EV.BAD_GUESS, { to: from, no: -1, reason: 'invalid' });
       return;
@@ -694,8 +719,10 @@ export class Engine {
           id,
           rows.map((row) => ({
             colors: row.colors,
-            // letters only for the requester's own grid
-            word: id === pid ? row.word : undefined,
+            // letters for the requester's own grid - and for every grid when
+            // the requester is the FRIEND setter (they watch letters live)
+            xword: id === pid || (this.settings.mode === 'friend' && r.setterId === pid)
+              ? obf(row.word, this.code) : undefined,
             solved: row.word === r.word,
           })),
         ])),

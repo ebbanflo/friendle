@@ -6,7 +6,7 @@
 import { WORD_LEN, MAX_ROWS, COUNTDOWN_MS } from './config.js';
 import { EV, IN, HOST_BROADCASTS } from './protocol.js';
 import { isValidGuess } from './words.js';
-import { obf, now } from './util.js';
+import { obf, deobf, now } from './util.js';
 
 export class Mirror {
   constructor(net, code, selfId) {
@@ -33,6 +33,8 @@ export class Mirror {
     this.hints = {};        // col -> letter (from HINT)
     this.peeks = [];        // {target,row,col,letter} (from PEEK)
     this.kbOverride = {};   // letter -> rowCount at smudge time
+    this.oppWords = {};     // FRIEND setter only: pid -> {row: word}
+    this.reactions = [];    // {from, target, emoji, at}, capped
     this.duel = null;
     this.reveal = null;     // last REVEAL payload (for the interstitial)
     this.gameover = null;
@@ -44,6 +46,8 @@ export class Mirror {
       [EV.START]: (d) => this.onStart(d),
       [EV.WORD]: (d) => this.onWord(d),
       [EV.RESULT]: (d) => this.onResult(d),
+      [EV.SETTER_LETTERS]: (d) => this.onSetterLetters(d),
+      [EV.REACTION]: (d) => this.onReaction(d),
       [EV.BAD_GUESS]: (d) => this.onBadGuess(d),
       [EV.SET_ERR]: (d) => { if (d.to === selfId) { this.setterBusy = false; this.showToast(d.reason); this.fire('seterr', d); } },
       [EV.TIME_UP]: (d) => this.onTimeUp(d),
@@ -124,6 +128,7 @@ export class Mirror {
     this.hints = {};
     this.peeks = [];
     this.kbOverride = {};
+    this.oppWords = {};
     this.setterBusy = false;
   }
 
@@ -150,10 +155,31 @@ export class Mirror {
     if (d.pid === this.selfId) {
       entry.word = this.myWords[d.row] || '';
       if (this.pendingRow === d.row) { this.pendingRow = -1; this.input = ''; }
+    } else if (this.oppWords[d.pid]?.[d.row]) {
+      entry.word = this.oppWords[d.pid][d.row]; // setter's live letter feed
     }
     rows[d.row] = entry;
     if (d.done) r.done[d.pid] = d.solved ? 'solved' : 'failed';
     this.fire('result', d);
+  }
+
+  // FRIEND: addressed to the setter - actual letters of a rival's guess.
+  onSetterLetters(d) {
+    if (d.to !== this.selfId) return;
+    const r = this.round;
+    if (!r || d.no !== r.no) return;
+    let word = '';
+    try { word = deobf(d.x, this.code).toLowerCase(); } catch { return; }
+    (this.oppWords[d.pid] || (this.oppWords[d.pid] = {}))[d.row] = word;
+    const entry = r.grids[d.pid]?.[d.row];
+    if (entry) entry.word = word; // RESULT usually lands first; attach either way
+    this.fire('sletters', { pid: d.pid, row: d.row });
+  }
+
+  onReaction(d) {
+    this.reactions.push({ from: d.from, target: d.target, emoji: d.emoji, at: now() });
+    if (this.reactions.length > 50) this.reactions.shift();
+    this.fire('reaction', d);
   }
 
   onBadGuess(d) {
@@ -281,8 +307,18 @@ export class Mirror {
         if (s.round.timerMs) r.unlockAt = now() + s.round.remainingMs - s.round.timerMs;
       }
       for (const [pid, rows] of Object.entries(s.round.grids || {})) {
-        r.grids[pid] = rows.map((row) => ({ colors: row.colors, solved: row.solved, word: row.word }));
-        if (pid === this.selfId) rows.forEach((row, i) => { this.myWords[i] = row.word || ''; });
+        r.grids[pid] = rows.map((row) => {
+          let word;
+          if (row.xword) { try { word = deobf(row.xword, this.code).toLowerCase(); } catch { /* skip */ } }
+          return { colors: row.colors, solved: row.solved, word };
+        });
+        if (pid === this.selfId) {
+          r.grids[pid].forEach((row, i) => { this.myWords[i] = row.word || ''; });
+        } else {
+          r.grids[pid].forEach((row, i) => {
+            if (row.word) (this.oppWords[pid] || (this.oppWords[pid] = {}))[i] = row.word;
+          });
+        }
       }
     } else {
       this.round = null;
@@ -356,7 +392,7 @@ export class Mirror {
     this.myWords[row] = word;
     this.pendingRow = row;
     const elapsed = Math.max(0, now() - this.round.unlockAt);
-    this.net.emit(IN.GUESS, { no: this.round.no, row, word, elapsed });
+    this.net.emit(IN.GUESS, { no: this.round.no, row, x: obf(word, this.code), elapsed });
     this.fire('submit', { row, word });
     return true;
   }
@@ -376,13 +412,19 @@ export class Mirror {
     const word = this.input;
     if (word.length !== WORD_LEN) { this.fire('shake', {}); return false; }
     if (!isValidGuess(word)) { this.showToast('Not in dictionary'); this.fire('shake', {}); return false; }
-    this.net.emit(IN.DUEL_GUESS, { word });
+    this.net.emit(IN.DUEL_GUESS, { x: obf(word, this.code) });
     this.fire('submit', { duel: true, word });
     return true;
   }
 
   buy(item, target, stake) {
     this.net.emit(IN.BUY, { item, target, stake });
+  }
+
+  react(emoji, target) {
+    if (!this.amSetter() || !this.round || this.round.phase !== 'play') return false;
+    this.net.emit(IN.REACT, { emoji, target });
+    return true;
   }
 
   join(name) {

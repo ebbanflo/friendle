@@ -348,6 +348,43 @@ input[type="text"], #inp-name, #inp-code {
 @keyframes peek-glow { 50% { box-shadow: 0 0 10px #fff; } }
 .opp-status { font-size: .68rem; color: var(--muted); margin-top: .2rem; min-height: .9em; }
 
+/* FRIEND setter spectator view: rival grids grow up and show letters */
+.opponents.setter-view { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: .9rem; }
+.opponents.setter-view .opp-tile {
+  width: clamp(1.6rem, 7vw, 2.2rem); height: clamp(1.6rem, 7vw, 2.2rem);
+  font-size: clamp(.85rem, 3.8vw, 1.15rem); border-radius: .18rem;
+}
+.opponents.setter-view .opp-grid { gap: .2rem; }
+.opponents.setter-view .opp-row { gap: .2rem; }
+.opponents.setter-view .opp-name { font-size: .85rem; max-width: none; }
+.opp-panel { position: relative; }
+
+/* the setter's heckle bar + flying emoji */
+.react-bar { display: flex; gap: .1rem; margin-top: .3rem; justify-content: center; flex-wrap: wrap; }
+.react-btn { font-size: 1.15rem; padding: .1rem .18rem; border-radius: .3rem; line-height: 1; transition: transform .1s; }
+.react-btn:hover { background: rgba(255, 255, 255, .1); transform: scale(1.25) rotate(-6deg); }
+.float-emoji {
+  position: absolute; left: 50%; top: 40%; font-size: 1.7rem; pointer-events: none; z-index: 30;
+  animation: float-up 1.6s ease-out forwards;
+}
+@keyframes float-up {
+  0%   { transform: translate(-50%, 0) scale(.5) rotate(0); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: translate(-50%, -75px) scale(1.5) rotate(10deg); opacity: 0; }
+}
+.emoji-splash {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font-size: 4.5rem; z-index: 30; pointer-events: none;
+  animation: splash 1.4s ease-out forwards;
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, .45));
+}
+@keyframes splash {
+  0%   { transform: scale(.2) rotate(-15deg); opacity: 0; }
+  20%  { transform: scale(1.35) rotate(4deg); opacity: 1; }
+  70%  { transform: scale(1) rotate(0); opacity: 1; }
+  100% { transform: scale(1.7); opacity: 0; }
+}
+
 /* ============ keyboard ============ */
 .keyboard { display: flex; flex-direction: column; gap: .35rem; width: 100%; max-width: 31rem; padding-top: .2rem; }
 .krow { display: flex; gap: .3rem; justify-content: center; }

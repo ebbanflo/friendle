@@ -37,8 +37,11 @@ standing wins the ⚔ crown.
 ### FRIEND 💗
 The purest form of the art: one player — the **setter** — secretly types their
 own 5-letter word (any real word in the dictionary), and everyone else races
-to guess it while the setter watches the color grids squirm. If *nobody*
-cracks it, the setter scores instead. The setter role rotates every word, so
+to guess it. Since the setter isn't competing, they get the best seat in the
+house: every guesser's grid **with the actual letters**, live, plus an emoji
+heckle bar (😂🔥😱👀💀🫠) to react to each terrible guess as it lands.
+Guessers still only see each other's colors — they're competing. If *nobody*
+cracks the word, the setter scores instead. The role rotates every word, so
 everyone gets a turn being the villain. No power-ups here — it's pure.
 
 ## The power-up shop (Classic & Royale)

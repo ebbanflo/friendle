@@ -46,8 +46,52 @@ test('friend mode: typed secrets, private setter, rotation, stump-the-room scori
     if (env.t !== 'reveal') expect(line).not.toContain('gloom');
   }
 
-  // A solves; B fails -> A scores, setter does not
+  // ---------- setter spectator view: letters + reactions ----------
   await waitUnlocked(pA);
+  await guessWait(pA, 'crane');
+
+  // the setter sees A's ACTUAL letters, live...
+  await host.waitForFunction((a) => {
+    const st = window.__friendle.state();
+    return st.round?.grids[a]?.[0]?.word === 'crane';
+  }, aId, { polling: 100 });
+  await expect(host.locator(`[data-testid="opp-${aId}-0-0"]`)).toHaveText('C');
+  // ...their own board folds away in favor of the big rival grids
+  await expect(host.locator('#board')).toBeHidden();
+  await expect(host.locator('#opponents')).toHaveClass(/setter-view/);
+
+  // rival B still gets colors only - they're competing
+  await pB.waitForFunction((a) => {
+    const st = window.__friendle.state();
+    return (st.round?.grids[a] || []).length === 1;
+  }, aId, { polling: 100 });
+  expect((await state(pB)).round.grids[aId][0].word).toBeUndefined();
+  await expect(pB.locator(`[data-testid="opp-${aId}-0-0"]`)).toHaveText('');
+
+  // heckle bar shows for the setter only
+  await expect(host.locator(`[data-react-for="${aId}"]`)).toBeVisible();
+  await expect(pB.locator(`[data-react-for="${aId}"]`)).toBeHidden();
+
+  // setter fires two emoji back-to-back: the first lands everywhere, the
+  // second dies on the host's spam brake
+  await host.evaluate((a) => {
+    window.__friendle.react('\u{1F525}', a);
+    window.__friendle.react('\u{1F480}', a);
+  }, aId);
+  for (const p of [host, pA, pB]) {
+    await p.waitForFunction(() => window.__friendle.state().reactions.length >= 1, null, { polling: 100 });
+  }
+  await pB.waitForTimeout(300);
+  const rxs = (await state(pB)).reactions;
+  expect(rxs).toHaveLength(1);
+  expect(rxs[0].emoji).toBe('\u{1F525}');
+  expect(rxs[0].target).toBe(aId);
+  expect(rxs[0].from).toBe(hostId);
+
+  // a competing guesser cannot react (mirror refuses, host would too)
+  expect(await pB.evaluate((a) => window.__friendle.react('\u{1F525}', a), aId)).toBe(false);
+
+  // A solves; B fails -> A scores, setter does not
   await guessWait(pA, 'gloom');
   await failWord(pB, 'gloom');
   await waitReveal(pB, 1);
@@ -77,10 +121,12 @@ test('friend mode: typed secrets, private setter, rotation, stump-the-room scori
   expect(s.lastReveal.winner).toBeNull();
   expect(s.lastReveal.deltas[aId]).toBe(150); // stumped the room
 
-  // the setter watched color-only grids live
-  expect(s.round.grids[hostId].every((r) => /^[gyx]{5}$/.test(r.colors))).toBe(true);
+  // rotation carries the perks: ANNA (this word's setter) saw B's letters,
+  // while host - a competing guesser - saw B's colors only
   const aView = await state(pA);
-  expect(aView.round.grids[bId][0].word).toBeUndefined();
+  expect(aView.round.grids[bId][0].word).toBe('crane'); // first wrongWords entry
+  expect(s.round.grids[bId][0].word).toBeUndefined();
+  expect(s.round.grids[hostId].every((r) => /^[gyx]{5}$/.test(r.colors))).toBe(true);
 
   // ---------- word 3: rotates to BORIS; A solves; then game over ----------
   await pB.waitForFunction(() => window.__friendle.state().round?.phase === 'set'

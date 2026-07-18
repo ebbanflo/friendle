@@ -2,7 +2,7 @@
 // through it. Persistent tile/key nodes are mutated in place so CSS animations
 // survive updates.
 
-import { WORD_LEN, MAX_ROWS, SHOP, DEFAULT_SETTINGS } from './config.js';
+import { WORD_LEN, MAX_ROWS, SHOP, DEFAULT_SETTINGS, REACTIONS } from './config.js';
 import { el, fmtMs, now } from './util.js';
 import { sfx, soundEnabled, setSound } from './audio.js';
 
@@ -240,6 +240,8 @@ export class UI {
       case 'hint': this.renderBoard(); this.showToast(`\u{1F4A1} letter ${d.col + 1} is "${d.letter.toUpperCase()}"`); sfx.peek(); break;
       case 'peek': this.renderOpponents(); this.showToast('\u{1F50D} peeked!'); sfx.peek(); break;
       case 'smudge': this.renderKeyboard(); break; // silent: poisoned memory
+      case 'sletters': this.renderOpponents(); break;
+      case 'reaction': this.spawnReaction(d); break;
       case 'duelstart': this.onDuelStart(d); break;
       case 'duelrow': this.renderDuel(); sfx.flip(1); break;
       case 'duelend': this.onDuelEnd(d); break;
@@ -333,12 +335,21 @@ export class UI {
         tiles.push(row);
       }
       this.oppTiles[p.id] = tiles;
+      // FRIEND setter's heckle bar - hidden unless I'm the watching setter
+      const reactBar = el('div', { class: 'react-bar hidden', 'data-react-for': p.id });
+      for (const emoji of REACTIONS) {
+        reactBar.append(el('button', {
+          class: 'react-btn', text: emoji, 'data-testid': `react-${p.id}-${emoji}`,
+          onclick: () => m.react(emoji, p.id),
+        }));
+      }
       box.append(el('div', {
         class: 'opp-panel', 'data-testid': `opp-${p.id}`, style: { '--sig': p.color },
       },
       el('div', { class: 'opp-name', text: p.name }),
       grid,
-      el('div', { class: 'opp-status', 'data-opp-status': p.id })));
+      el('div', { class: 'opp-status', 'data-opp-status': p.id }),
+      reactBar));
     }
   }
 
@@ -353,7 +364,9 @@ export class UI {
           const t = tiles[r][c];
           const row = rows[r];
           t.className = 'opp-tile' + (row ? ` ${row.colors[c]}` : '');
-          t.textContent = '';
+          // letters render ONLY when the mirror has them - i.e. for the
+          // FRIEND setter's live feed; competing guessers get colors alone
+          t.textContent = row && row.word ? row.word[c].toUpperCase() : '';
         }
       }
       // peeked letters bleed through (colors-only rule broken ONLY by Peek)
@@ -408,8 +421,41 @@ export class UI {
       banner.classList.add('hidden');
     }
     if (setPhase && m.amSetter()) this.renderSetter();
+    this.renderSetterView();
     if (d.skipped) this.showToast('Setter skipped — next player sets!');
     if (!setPhase) sfx.reveal();
+  }
+
+  // FRIEND setter spectating: own board folds away, rival grids grow and show
+  // real letters, and each panel grows a heckle bar.
+  renderSetterView() {
+    const m = this.mirror;
+    const watching = !!(m.settings && m.settings.mode === 'friend' && m.round
+      && m.round.phase === 'play' && m.amSetter() && !m.over);
+    document.querySelector('.board-wrap').classList.toggle('hidden', watching);
+    $('opponents').classList.toggle('setter-view', watching);
+    $('keyboard').classList.toggle('hidden', watching);
+    for (const bar of document.querySelectorAll('.react-bar')) {
+      bar.classList.toggle('hidden', !watching);
+    }
+  }
+
+  spawnReaction(d) {
+    const m = this.mirror;
+    // everyone sees the emoji sail over the target's panel...
+    const panel = document.querySelector(`[data-testid="opp-${d.target}"]`);
+    if (panel) {
+      const f = el('span', { class: 'float-emoji', text: d.emoji });
+      panel.append(f);
+      setTimeout(() => f.remove(), 1700);
+    }
+    // ...and the target gets it big, center-board
+    if (d.target === m.selfId) {
+      const splash = el('div', { class: 'emoji-splash', text: d.emoji });
+      document.querySelector('.board-wrap').append(splash);
+      setTimeout(() => splash.remove(), 1500);
+    }
+    sfx.pop();
   }
 
   renderRoundHeader() {

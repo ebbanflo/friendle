@@ -198,6 +198,7 @@ function installDebug() {
       input: S.mirror.input,
       hints: { ...S.mirror.hints },
       peeks: S.mirror.peeks.map((p) => ({ ...p })),
+      reactions: S.mirror.reactions.map((r) => ({ ...r })),
       keyboard: S.mirror.keyboardState(),
       inputLocked: S.mirror.inputLocked(),
       roomDead: S.mirror.roomDead,
@@ -213,6 +214,7 @@ function installDebug() {
     enter: () => S.mirror.enter(),
     backspace: () => S.mirror.backspace(),
     buy: (item, target, stake) => S.mirror.buy(item, target, stake),
+    react: (emoji, target) => S.mirror.react(emoji, target),
     quit: () => quitToMenu(),
   };
 }

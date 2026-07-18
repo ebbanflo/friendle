@@ -11,10 +11,11 @@ export const EVENT_NAME = 'game';
 // ---- intents: player -> host -------------------------------------------
 export const IN = {
   JOIN: 'join',         // {name}
-  GUESS: 'guess',       // {no, row, word, elapsed}
+  GUESS: 'guess',       // {no, row, x: obfuscated word, elapsed}
   SECRET: 'secret',     // FRIEND setter -> host {x: obfuscated word}
   BUY: 'buy',           // {item, target?, stake?}
-  DUEL_GUESS: 'dguess', // {word}
+  DUEL_GUESS: 'dguess', // {x: obfuscated word}
+  REACT: 'react',       // FRIEND setter -> host {emoji, target}
   QUIT: 'quit',         // {} (sender leaves; host handles + mirrors)
   RESYNC: 'resyncreq',  // {} ask host for a full snapshot
 };
@@ -26,6 +27,9 @@ export const EV = {
   START: 'start',        // {settings, players}
   WORD: 'word',          // {no, total, phase:'set'|'play', setterId?, timerMs, pot, scores, anted?}
   RESULT: 'result',      // {pid, no, row, colors, solved, done}
+  SETTER_LETTERS: 'sletters', // FRIEND: {to: setterId, pid, no, row, x} - the
+                              // setter watches actual letters, rivals never do
+  REACTION: 'reaction',  // FRIEND: {from: setterId, target, emoji}
   BAD_GUESS: 'badguess', // {to, no, reason}
   SET_ERR: 'seterr',     // {to, reason}   FRIEND: setter word rejected
   TIME_UP: 'timeup',     // {no}

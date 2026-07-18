@@ -78,5 +78,6 @@ export const sfx = {
   tick: () => tone({ freq: 1000, type: 'sine', dur: 0.04, gain: 0.18 }),
   duel: () => { [220, 220, 330].forEach((f, i) => tone({ freq: f, type: 'sawtooth', dur: 0.15, gain: 0.3, at: i * 0.14 })); noise({ dur: 0.25, gain: 0.2, freq: 2000, at: 0.4 }); },
   join: () => tone({ freq: 660, type: 'triangle', dur: 0.12, gain: 0.3, slide: 200 }),
+  pop: () => { tone({ freq: 880, type: 'sine', dur: 0.06, gain: 0.3, slide: 300 }); tone({ freq: 1320, type: 'triangle', dur: 0.08, gain: 0.2, at: 0.05 }); },
   reveal: () => tone({ freq: 440, type: 'sine', dur: 0.3, gain: 0.25, slide: 220 }),
 };

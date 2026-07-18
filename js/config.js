@@ -45,6 +45,10 @@ export const SHOP = {
 };
 export const FREEZE_MS = 5000;
 
+// FRIEND mode: the setter's heckling palette, one tap per guesser panel.
+export const REACTIONS = ['\u{1F602}', '\u{1F525}', '\u{1F631}', '\u{1F440}', '\u{1F480}', '\u{1FAE0}'];
+export const REACT_COOLDOWN_MS = 600; // host-enforced spam brake
+
 export const TIMER_CHOICES = [0, 60000, 90000, 120000]; // 0 = no timer
 export const WORDS_CHOICES = [3, 5, 10];
 

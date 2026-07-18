@@ -108,11 +108,21 @@ resume` with the word timer suspended.
   living player wins. Duel stakes settle immediately; a loser who can't cover
   the stake pays what they have and busts on the spot.
 - FRIEND: the setter's word travels setter → host in the `secret` intent,
-  XOR+base64-obfuscated with the room code (`util.obf`). **This is
-  obfuscation, not cryptography** — broadcast channels are public, and a
-  determined dev-tools user could decode it. The same caveat applies to
-  `hint`/`peek` grants (each leaks one letter to a snooper). Accepted
+  XOR+base64-obfuscated with the room code (`util.obf`). Guess words in
+  `guess`/`dguess` intents and the setter's letter feed (`sletters`) use the
+  same wrapper, so no guess or secret is casual network-tab reading. **This
+  is obfuscation, not cryptography** — broadcast channels are public, and a
+  determined dev-tools user could decode any of it. The same caveat applies
+  to `hint`/`peek` grants (each leaks one letter to a snooper). Accepted
   trade-off for a no-backend party game; don't pretend otherwise in UI copy.
+- FRIEND spectator perks: the setter (only) receives every guess's actual
+  letters via addressed `sletters` events (mirror keeps them in `oppWords`;
+  the UI renders letters for any grid row that has a `word`). The setter can
+  also fire emoji reactions (`react` intent → `reaction` broadcast) at a
+  guesser — validated host-side (setter-only, allowed emoji list, 600 ms
+  cooldown) and rendered as a floating emoji on the target's panel everywhere
+  plus a big splash on the target's own board. Competing guessers never get
+  each other's letters.
 
 ## Known traps (each one bit us or will bite you)
 
