@@ -52,10 +52,16 @@ export const REACT_COOLDOWN_MS = 600; // host-enforced spam brake
 export const TIMER_CHOICES = [0, 60000, 90000, 120000]; // 0 = no timer
 export const WORDS_CHOICES = [3, 5, 10];
 
+// Word difficulty (Classic & Royale). 'standard' = the classic random-word
+// experience over the full bank, ignoring difficulty classifications;
+// 'ramp' climbs easy -> medium -> hard as the game progresses.
+export const DIFFICULTY_CHOICES = ['standard', 'easy', 'medium', 'hard', 'ramp'];
+
 export const DEFAULT_SETTINGS = {
   mode: 'classic',        // 'classic' | 'royale' | 'friend'
   words: 5,               // classic & friend
   ante: 50,               // royale
+  difficulty: 'standard', // classic & royale, see DIFFICULTY_CHOICES
   timerMs: 0,             // 0 = none
   revealMs: 4000,         // interstitial between words (tests shrink it)
   countdownMs: COUNTDOWN_MS, // pre-word 3-2-1 (tests shrink it)

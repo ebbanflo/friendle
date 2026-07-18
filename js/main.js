@@ -161,6 +161,7 @@ function installDebug() {
         no: S.engine.round.no, phase: S.engine.round.phase,
         winner: S.engine.round.winner, setterId: S.engine.round.setterId,
         done: S.engine.round.done, suspended: S.engine.round.suspended,
+        tier: S.engine.round.tier || null,
       },
       duel: S.engine.duel && { ...S.engine.duel },
       players: S.engine.players.map((p) => ({ ...p })),
@@ -176,6 +177,7 @@ function installDebug() {
       round: S.mirror.round && {
         no: S.mirror.round.no, phase: S.mirror.round.phase,
         setterId: S.mirror.round.setterId, pot: S.mirror.round.pot,
+        tier: S.mirror.round.tier ?? null,
         done: { ...S.mirror.round.done },
         grids: Object.fromEntries(Object.entries(S.mirror.round.grids)
           .map(([pid, rows]) => [pid, rows.map((r) => ({ colors: r.colors, solved: !!r.solved, word: r.word }))])),

@@ -56,6 +56,21 @@ Buy mid-word with your points:
 | 🗑️ | **Smudge** | 100 | One gray letter on an opponent's keyboard un-grays — poison their memory |
 | ⚔️ | **Duel** | stake 0–200 | *Royale only.* Challenge a living foe: you alternate guesses on a fresh word while everyone spectates. Loser pays the stake — and busts out if they can't cover it |
 
+## Difficulty (Classic & Royale)
+
+The host picks a **LEVEL** in the lobby:
+
+- **STD** — the classic experience: any word from the full ~13,000-word bank,
+  biased toward everyday words. Difficulty labels are ignored.
+- **EASY / MED / HARD** — every word comes from a curated difficulty band
+  (3,000 easy, 4,000 medium, 5,000 hard words, ranked by how common the word
+  is plus how nasty its letters are — duplicates and J/Q/X/Z sting).
+- **RAMP** — starts easy and climbs: a gentle opener, a mean finish. In
+  Royale the climb tops out around word 7 and stays hard forever.
+
+FRIEND mode ignores all of this — its words come from your friends' brains,
+which are their own difficulty setting.
+
 ## Nice things it also does
 
 - **Optional per-word timer** (60s / 90s / 2 min) — run out and that word is a miss.

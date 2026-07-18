@@ -118,7 +118,7 @@ export class Mirror {
   resetRound(d) {
     this.round = {
       no: d.no, total: d.total, phase: d.phase, setterId: d.setterId || null,
-      timerMs: d.timerMs || 0, pot: d.pot || 0, anted: d.anted || 0,
+      timerMs: d.timerMs || 0, pot: d.pot || 0, anted: d.anted || 0, tier: d.tier || null,
       unlockAt: 0, grids: {}, done: {}, suspended: false, timeUp: false,
     };
     this.input = '';
@@ -139,6 +139,7 @@ export class Mirror {
     r.setterId = d.setterId || r.setterId;
     r.pot = d.pot ?? r.pot;
     r.anted = d.anted ?? r.anted;
+    r.tier = d.tier ?? r.tier;
     if (d.scores) this.applyScores(d.scores);
     if (d.phase === 'play') r.unlockAt = now() + (this.settings?.countdownMs ?? COUNTDOWN_MS);
     this.reveal = null;

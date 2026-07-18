@@ -196,8 +196,9 @@ export class Engine {
       return;
     }
 
-    // classic / royale: engine picks the secret
-    this.round.word = pickWord(this.usedWords);
+    // classic / royale: engine picks the secret at the round's difficulty
+    this.round.tier = this.resolveTier(this.round.no);
+    this.round.word = pickWord(this.usedWords, this.round.tier);
     this.usedWords.add(this.round.word);
 
     let anted = 0;
@@ -222,8 +223,20 @@ export class Engine {
     this.net.emit(EV.WORD, {
       no: this.round.no, total: this.totalWords(), phase: 'play',
       setterId: this.round.setterId, timerMs: this.settings.timerMs,
-      pot: this.pot, scores: this.scoreMap(), ...extra,
+      pot: this.pot, scores: this.scoreMap(), tier: this.round.tier || null, ...extra,
     });
+  }
+
+  // Difficulty -> tier for word #no. 'standard' returns null (full bank,
+  // commonest-biased). 'ramp' climbs easy -> medium -> hard: over the set
+  // word count in Classic, over the first ~9 words in endless Royale.
+  resolveTier(no) {
+    const d = this.settings.difficulty || 'standard';
+    if (d === 'standard' || this.settings.mode === 'friend') return null;
+    if (d !== 'ramp') return d;
+    const total = this.totalWords();
+    const f = total > 1 ? (no - 1) / (total - 1) : Math.min(1, (no - 1) / 8);
+    return f < 1 / 3 ? 'easy' : f < 2 / 3 ? 'medium' : 'hard';
   }
 
   armDeadline() {
@@ -547,7 +560,8 @@ export class Engine {
     clearTimeout(this.timers.grace);
     this.timers.grace = null;
 
-    const word = pickWord(this.usedWords);
+    // duel words match the round's difficulty
+    const word = pickWord(this.usedWords, r.tier || null);
     this.usedWords.add(word);
     this.duel = { a: a.id, b: b.id, stake, word, rows: [], turn: a.id, over: false };
     this.net.emit(EV.DUEL_START, { a: a.id, b: b.id, stake });

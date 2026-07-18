@@ -143,7 +143,7 @@ export class UI {
         const btn = e.target.closest('.seg-btn');
         if (!btn || !this.mirror || !this.mirror.isHost()) return;
         const key = seg.dataset.setting;
-        const val = key === 'mode' ? btn.dataset.val : Number(btn.dataset.val);
+        const val = ['mode', 'difficulty'].includes(key) ? btn.dataset.val : Number(btn.dataset.val);
         this.a.setSettings({ [key]: val });
         sfx.key();
       });
@@ -285,6 +285,7 @@ export class UI {
     }
     $('set-ante').classList.toggle('hidden', s.mode !== 'royale');
     $('set-words').classList.toggle('hidden', s.mode === 'royale');
+    $('set-diff').classList.toggle('hidden', s.mode === 'friend'); // FRIEND words are human-made
     $('mode-blurb').textContent = {
       classic: 'same word, everyone races — most points after all words wins',
       royale: 'endless words, ante into the pot, hit 0 = out. last standing wins',
@@ -462,8 +463,9 @@ export class UI {
     const m = this.mirror;
     const r = m.round;
     if (!r) return;
-    $('hdr-round').textContent = m.settings.mode === 'royale'
-      ? `WORD ${r.no}` : `WORD ${r.no}/${r.total}`;
+    const tierTag = r.tier ? ` · ${r.tier.toUpperCase()}` : '';
+    $('hdr-round').textContent = (m.settings.mode === 'royale'
+      ? `WORD ${r.no}` : `WORD ${r.no}/${r.total}`) + tierTag;
     const potEl = $('hdr-pot');
     if (m.settings.mode === 'royale') {
       potEl.textContent = `\u{1F3C6} POT ${r.pot}`;

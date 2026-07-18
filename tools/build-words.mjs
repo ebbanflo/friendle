@@ -1,25 +1,35 @@
 #!/usr/bin/env node
-// One-off generator for data/solutions.js and data/guesses.js.
+// Generator for data/solutions.js, data/guesses.js and data/tiers.js.
 //
-// There are only ~6-7k genuinely common five-letter English words, so a ~10k
-// solutions list is built by evidence-stacking: every candidate is scored by
-// how many independent sources attest it (two curated lists, a dictionary,
-// two frequency corpora) and how strongly. The top of the list is everyday
-// vocabulary; the bottom is crossword-grade but still real and guessable.
+// The scrabble-legal 5-letter English lexicon tops out around 15k (the Wordle
+// valid-guess list already subsumes ENABLE and SOWPODS), so a ~20k bank is
+// built from: the full curated Wordle list + every dictionary word (dwyl,
+// wordnik) that is corpus-attested or agreed on by both dictionaries -
+// name-filtered, profanity-filtered, and evidence-ranked commonest-first.
+//
+// Difficulty tiers (easy/medium/hard) are score-ordered slices: score =
+// commonness percentile + structural penalties (duplicate letters, rare
+// letters), so "jazzy" lands harder than its frequency alone suggests. The
+// deepest tail stays unclassified - only `standard` mode (full bank, biased
+// toward the front) ever serves it.
 //
 // Inputs (downloaded separately, see INSTRUCTIONS.md):
-//   wordle-all.txt   - full Wordle valid-guess list (tabatkins/wordle-list, ~14.8k)
+//   wordle-all.txt   - full Wordle valid-guess list (tabatkins/wordle-list)
 //   sgb-words.txt    - Knuth's 5757 common five-letter words (curated)
-//   en_full.txt      - hermitdave/FrequencyWords en 2018 ("word count" lines, subtitles)
-//   gbooks.txt       - hackerb9/gwordlist frequency-alpha-alldicts.txt (Google Books)
+//   en_full.txt      - hermitdave/FrequencyWords en 2018 (subtitles corpus)
+//   gbooks.txt       - hackerb9/gwordlist frequency-alpha-alldicts.txt
 //   words_alpha.txt  - dwyl/english-words (370k dictionary spellings)
+//   wordnik.txt      - wordnik/wordlist (quoted, one word per line)
+//   firstnames.txt   - smashew/NameDatabases US first names
+//   surnames.txt     - smashew/NameDatabases US surnames
 //   badwords.txt     - LDNOOBW English profanity list
-// Usage: node tools/build-words.mjs <srcdir> <outdir> [targetSolutions=10000]
+// Usage: node tools/build-words.mjs <srcdir> <outdir> [targetSolutions=20000]
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const [srcDir, outDir, targetArg] = process.argv.slice(2);
-const TARGET = Number(targetArg || 10000);
+const TARGET = Number(targetArg || 20000);
+const TIER_SIZES = { easy: 3000, medium: 4000, hard: 5000 };
 const read = (f) => readFileSync(join(srcDir, f), 'utf8').split(/\r?\n/);
 const five = (w) => /^[a-z]{5}$/.test(w);
 const norm = (lines) => lines.map((w) => w.trim().toLowerCase());
@@ -27,6 +37,17 @@ const norm = (lines) => lines.map((w) => w.trim().toLowerCase());
 const valid = new Set(norm(read('wordle-all.txt')).filter(five));
 const sgb = new Set(norm(read('sgb-words.txt')).filter(five));
 const dict = new Set(norm(read('words_alpha.txt')).filter(five));
+const wordnik = new Set(norm(read('wordnik.txt')).map((w) => w.replace(/"/g, '')).filter(five));
+// Scrabble dictionaries admit NO proper nouns - the perfect referee for
+// "name that is also a real word" (smith, maria) vs list pollution (patel).
+const scrab = new Set([
+  ...norm(read('enable1.txt')).filter(five),
+  ...norm(read('sowpods.txt')).filter(five),
+]);
+const names = new Set([
+  ...norm(read('firstnames-all.txt')),  // worldwide first names (smashew all.txt)
+  ...norm(read('surnames-all.txt')),    // worldwide surnames
+].filter(five));
 
 // Profanity: LDNOOBW plus manual additions; block exact matches and any word
 // extending a 4+ letter bad stem (fuck->fucks, cunt->cunty, shit->shite).
@@ -40,11 +61,13 @@ const EXTRA_BAD = ['asses', 'bitch', 'whore', 'penis', 'boner', 'semen', 'prick'
   // slurs (incl. plurals/variants) found by manual scan of the candidate pool
   'spiks', 'dagos', 'sambo', 'zambo', 'boong', 'gippo', 'lezzy', 'lezza', 'micks',
   'honky', 'cholo', 'munts', 'kafir', 'cooly', 'squaw', 'injun', 'gyppy', 'kraut',
-  'hymie', 'shiks', 'wetba'];
+  'hymie', 'shiks', 'wetba', 'darki', 'dagoe', 'zambos', 'boche', 'polak',
+  'yaboo', 'abies', 'jiggs', 'niggs', 'goyim', 'goyer'];
 // Excluded from solutions only (never the revealed answer) but still typeable:
 // dual-use words with an innocent primary meaning, plus NYT-style removals.
-const SOFT_BAD = new Set(['spook', 'dinge', 'swart', 'moola', 'goyim', 'wench',
-  'lynch', 'slave', 'harem', 'biddy', 'hoors', 'negus', 'fatso', 'dummy']);
+const SOFT_BAD = new Set(['spook', 'dinge', 'swart', 'moola', 'wench',
+  'lynch', 'slave', 'harem', 'biddy', 'hoors', 'negus', 'fatso', 'dummy',
+  'jihad', 'aryan', 'allah', 'nazes', 'fatwa', 'shoah']);
 const badAll = norm(read('badwords.txt')).concat(EXTRA_BAD).filter((w) => /^[a-z]{3,5}$/.test(w));
 const badExact = new Set(badAll.filter(five));
 const badStems = [...new Set(badAll.filter((w) => w.length === 4 || w.length === 5))];
@@ -68,13 +91,39 @@ for (const line of read('gbooks.txt')) {
   if (five(w) && !gbRank.has(w)) gbRank.set(w, Number(m[1]));
 }
 
+const attested = (w) => gbRank.has(w) || subCount.has(w);
+// A name-list hit only survives if Scrabble (or Knuth) says it's a real word.
+const nameBlocked = (w) => names.has(w) && !scrab.has(w) && !sgb.has(w);
+
+// Universe:
+//  - Wordle-legal words backed by at least one other source (drops the NYT
+//    list's oddities like "bilal" that no dictionary recognizes), plus
+//  - extras beyond the Wordle list: wordnik entries with corroboration.
+// NOTE: dwyl/words_alpha-ONLY words are deliberately excluded even when
+// corpus-attested - that pool is dominated by place names, brands,
+// contractions and non-English ("italy", "kodak", "thats", "bueno").
+// This universe is effectively the entire clean 5-letter English lexicon;
+// there is no honest source of further growth.
+const universe = new Set([
+  ...[...valid].filter((w) => scrab.has(w) || sgb.has(w) || wordnik.has(w) || dict.has(w)),
+  ...sgb,
+  ...[...wordnik].filter((w) => dict.has(w) || scrab.has(w) || attested(w)),
+]);
+// Admission requires Wordle- or Scrabble-legality. sgb stays an evidence
+// boost only - Knuth's list carries corpus informalities ("thats", "legos").
+const candidates = [...universe].filter(
+  (w) => (valid.has(w) || scrab.has(w))
+    && !isBad(w) && !SOFT_BAD.has(w) && !nameBlocked(w)
+);
+
 // Evidence score: independent attestations stack, so real words rise and
 // single-corpus noise (OCR errors, dialect spellings) sinks.
 const evidence = (w) => {
   let ev = 0;
   if (sgb.has(w)) ev += 6;
   if (valid.has(w)) ev += 2;
-  if (dict.has(w)) ev += 2;
+  if (dict.has(w)) ev += 1.5;
+  if (wordnik.has(w)) ev += 1.5;
   const g = gbRank.get(w);
   if (g !== undefined) ev += g <= 20000 ? 6 : g <= 50000 ? 5 : g <= 100000 ? 4 : g <= 150000 ? 2.5 : g <= 200000 ? 1 : 0.5;
   const c = subCount.get(w) ?? 0;
@@ -87,17 +136,32 @@ const subRank = new Map(
 );
 const tiebreak = (w) => Math.min(gbRank.get(w) ?? NEVER, (subRank.get(w) ?? NEVER) * 12);
 
-// Universe: the curated Wordle-legal list (no proper nouns by design), plus
-// Knuth's curated common words as a safety net. Every candidate must also be
-// a dictionary spelling and attested by at least one frequency corpus.
-const universe = new Set([...valid, ...[...sgb].filter((w) => dict.has(w))]);
-const candidates = [...universe].filter(
-  (w) => !isBad(w) && !SOFT_BAD.has(w) && (dict.has(w) || sgb.has(w)) && (gbRank.has(w) || subCount.has(w))
-);
 candidates.sort((a, b) => evidence(b) - evidence(a) || tiebreak(a) - tiebreak(b) || (a < b ? -1 : 1));
-// IMPORTANT: solutions stay sorted commonest-first; the game biases random
-// picks toward the front so everyday words dominate actual play.
+// IMPORTANT: solutions stay sorted commonest-first; standard mode biases
+// random picks toward the front so everyday words dominate casual play.
 const solutions = candidates.slice(0, Math.min(TARGET, candidates.length));
+
+// ---- difficulty tiers ---------------------------------------------------
+// score = commonness percentile (position in the evidence ranking) plus
+// structural penalties; lower = easier to guess.
+const RARE = new Set(['j', 'q', 'x', 'z']);
+const structural = (w) => {
+  let pen = 0;
+  if (new Set(w).size < w.length) pen += 8;           // duplicate letters
+  const rare = [...w].filter((ch) => RARE.has(ch)).length;
+  pen += Math.min(12, rare * 6);                       // rare letters
+  return pen;
+};
+const scored = solutions.map((w, i) => ({
+  w,
+  score: (i / solutions.length) * 100 + structural(w),
+}));
+scored.sort((a, b) => a.score - b.score || (a.w < b.w ? -1 : 1));
+const easy = scored.slice(0, TIER_SIZES.easy).map((x) => x.w);
+const medium = scored.slice(TIER_SIZES.easy, TIER_SIZES.easy + TIER_SIZES.medium).map((x) => x.w);
+const hard = scored
+  .slice(TIER_SIZES.easy + TIER_SIZES.medium, TIER_SIZES.easy + TIER_SIZES.medium + TIER_SIZES.hard)
+  .map((x) => x.w);
 
 // Guess dictionary: the standard Wordle valid list plus every solution.
 // Profanity is stripped here too: FRIEND-mode setters pick their secret from
@@ -106,9 +170,19 @@ const guesses = [...new Set([...valid, ...solutions])].filter((w) => !isBad(w)).
 
 mkdirSync(outDir, { recursive: true });
 const pack = (name, words) =>
-  `// Generated by tools/build-words.mjs - do not edit by hand.\n` +
   `export const ${name} = ${JSON.stringify(words.join(''))}.match(/.{5}/g);\n`;
-writeFileSync(join(outDir, 'solutions.js'), pack('SOLUTIONS', solutions));
-writeFileSync(join(outDir, 'guesses.js'), pack('GUESSES', guesses));
+const header = '// Generated by tools/build-words.mjs - do not edit by hand.\n';
+writeFileSync(join(outDir, 'solutions.js'), header + pack('SOLUTIONS', solutions));
+writeFileSync(join(outDir, 'guesses.js'), header + pack('GUESSES', guesses));
+writeFileSync(
+  join(outDir, 'tiers.js'),
+  header
+  + '// Score-ordered difficulty slices of SOLUTIONS (see build-words.mjs).\n'
+  + pack('EASY', easy) + pack('MEDIUM', medium) + pack('HARD', hard)
+);
 console.log(`pool: ${candidates.length}  solutions: ${solutions.length}  guesses: ${guesses.length}`);
-console.log('rank ~9900-9950:', candidates.slice(9900, 9950).join(' '));
+console.log(`tiers: easy ${easy.length}  medium ${medium.length}  hard ${hard.length}`);
+console.log('easy sample:', easy.slice(0, 12).join(' '), '|', easy.slice(-6).join(' '));
+console.log('medium sample:', medium.slice(0, 6).join(' '), '|', medium.slice(-6).join(' '));
+console.log('hard sample:', hard.slice(0, 6).join(' '), '|', hard.slice(-6).join(' '));
+console.log('deep tail:', solutions.slice(-12).join(' '));
