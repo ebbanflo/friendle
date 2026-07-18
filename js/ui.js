@@ -228,7 +228,12 @@ export class UI {
         break;
       case 'word': this.onWord(d); break;
       case 'result': this.onResult(d); break;
-      case 'type': this.renderInputRow(); (d.back ? sfx.back : sfx.key)(); break;
+      case 'type':
+        // during a duel, typed letters land in the DUEL grid, not the board
+        if (m.duel && !m.duel.over) this.renderDuel();
+        else this.renderInputRow();
+        (d.back ? sfx.back : sfx.key)();
+        break;
       case 'submit': sfx.flip(0); break;
       case 'badguess': this.renderBoard(); this.shakeRow(); break;
       case 'shake': this.shakeRow(); sfx.invalid(); break;
@@ -286,10 +291,11 @@ export class UI {
     $('set-ante').classList.toggle('hidden', s.mode !== 'royale');
     $('set-words').classList.toggle('hidden', s.mode === 'royale');
     $('set-diff').classList.toggle('hidden', s.mode === 'friend'); // FRIEND words are human-made
+    $('words-one').classList.toggle('hidden', s.mode !== 'friend'); // 1-each is a FRIEND thing
     $('mode-blurb').textContent = {
       classic: 'same word, everyone races — most points after all words wins',
       royale: 'endless words, ante into the pot, hit 0 = out. last standing wins',
-      friend: 'take turns setting a secret word for the others. stump everyone to score',
+      friend: `take turns setting secret words — ${s.words} each. stump people to score`,
     }[s.mode] || '';
     const enough = m.players.filter((p) => p.connected).length >= 2;
     $('btn-start').classList.toggle('hidden', !m.isHost());
@@ -605,7 +611,7 @@ export class UI {
       const id = btn.dataset.item;
       const item = SHOP[id];
       if (id === 'duel') {
-        btn.classList.toggle('hidden', mode !== 'royale');
+        btn.classList.remove('hidden'); // Classic & Royale (shop is friend-hidden anyway)
         btn.disabled = !canBuy || !!m.duel;
       } else {
         btn.classList.remove('hidden');

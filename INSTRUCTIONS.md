@@ -97,16 +97,24 @@ resume` with the word timer suspended.
 
 ### Game rules encoded in engine.js
 
-- Scoring (Classic/FRIEND): first solver gets
+- Scoring (Classic): first solver gets
   `100 + (6 - rowsUsed)*20 + speedBonus(0..50 fading over 60 s)`; later
-  solvers get 40% of their own formula; a failed word scores 0; a FRIEND word
-  nobody solves gives the setter 150.
+  solvers get 40% of their own formula; a failed word scores 0.
+- Scoring (FRIEND): ranked by FEWEST guesses, not time - every solver gets
+  the full `100 + (6 - rowsUsed)*20` (no speed bonus, no late cut), so 3
+  rows beats 6 regardless of clock order; ties go to the earlier solve. The
+  setter earns `setterPerStump` (100) for EVERY guesser who fails the word.
+  The words setting means words EACH as setter (total rounds = words x
+  players, and `totalWords()` recomputes if someone leaves).
 - Royale: everyone starts at 1000; each word every survivor antes
   `min(ante, score)` into the pot; first solver takes the whole pot; unsolved
   pots roll over. **Elimination check happens at reveal time** — a player at 0
   who wins the pot survives; one who doesn't spectates from then on. Last
-  living player wins. Duel stakes settle immediately; a loser who can't cover
-  the stake pays what they have and busts on the spot.
+  living player wins. Duels run in Classic AND Royale (FRIEND has no shop);
+  stakes settle immediately; only in Royale does a loser who can't cover the
+  stake bust out on the spot. Trap: anything typed during a duel renders into
+  the DUEL grid — the `type` event must route to `renderDuel()`, not the main
+  board (this shipped broken once: duelers typed blind).
 - FRIEND: the setter's word travels setter → host in the `secret` intent,
   XOR+base64-obfuscated with the room code (`util.obf`). Guess words in
   `guess`/`dguess` intents and the setter's letter feed (`sletters`) use the
@@ -115,14 +123,16 @@ resume` with the word timer suspended.
   determined dev-tools user could decode any of it. The same caveat applies
   to `hint`/`peek` grants (each leaks one letter to a snooper). Accepted
   trade-off for a no-backend party game; don't pretend otherwise in UI copy.
-- FRIEND spectator perks: the setter (only) receives every guess's actual
-  letters via addressed `sletters` events (mirror keeps them in `oppWords`;
-  the UI renders letters for any grid row that has a `word`). The setter can
-  also fire emoji reactions (`react` intent → `reaction` broadcast) at a
-  guesser — validated host-side (setter-only, allowed emoji list, 600 ms
-  cooldown) and rendered as a floating emoji on the target's panel everywhere
-  plus a big splash on the target's own board. Competing guessers never get
-  each other's letters.
+- FRIEND spectator perks: `round.viewers` (the setter, plus each solver the
+  moment they solve) receive every guess's actual letters via addressed
+  `sletters` events — a fresh solver gets a backfill of everything they
+  missed, and resync honors viewer status. The mirror keeps letters in
+  `oppWords`; the UI renders letters for any grid row that has a `word`.
+  The setter can also fire emoji reactions (`react` intent → `reaction`
+  broadcast) at a guesser — validated host-side (setter-only, allowed emoji
+  list, 600 ms cooldown) and rendered as a floating emoji on the target's
+  panel everywhere plus a big splash on the target's own board. STILL-
+  COMPETING guessers never get each other's letters.
 
 ## Known traps (each one bit us or will bite you)
 

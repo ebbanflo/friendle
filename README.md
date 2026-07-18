@@ -37,12 +37,19 @@ standing wins the ⚔ crown.
 ### FRIEND 💗
 The purest form of the art: one player — the **setter** — secretly types their
 own 5-letter word (any real word in the dictionary), and everyone else races
-to guess it. Since the setter isn't competing, they get the best seat in the
-house: every guesser's grid **with the actual letters**, live, plus an emoji
-heckle bar (😂🔥😱👀💀🫠) to react to each terrible guess as it lands.
-Guessers still only see each other's colors — they're competing. If *nobody*
-cracks the word, the setter scores instead. The role rotates every word, so
-everyone gets a turn being the villain. No power-ups here — it's pure.
+to guess it. The host picks **1 / 3 / 5 / 10 words — each**: every player
+sets that many, so 5 words with 3 players is a 15-round night.
+
+Scoring is about **fewest guesses, not speed**: crack it in 3 rows and you
+outscore someone who hit enter first but needed all 6. The setter earns
+points **for every guesser they stump** — a full-room stump is a jackpot.
+
+Since the setter isn't competing, they get the best seat in the house: every
+guesser's grid **with the actual letters**, live, plus an emoji heckle bar
+(😂🔥😱👀💀🫠🧠) to react to each terrible guess as it lands. And the moment
+*you* solve the word, you join the letter-vision club too — watch the
+stragglers flail in full detail. Still-competing guessers only ever see each
+other's colors. No power-ups here — it's pure.
 
 ## The power-up shop (Classic & Royale)
 
@@ -54,7 +61,7 @@ Buy mid-word with your points:
 | 🧊 | **Freeze** | 100 | All opponents' keyboards lock for 5 seconds |
 | 💡 | **Hint** | 75 | Reveal one green letter in your own grid |
 | 🗑️ | **Smudge** | 100 | One gray letter on an opponent's keyboard un-grays — poison their memory |
-| ⚔️ | **Duel** | stake 0–200 | *Royale only.* Challenge a living foe: you alternate guesses on a fresh word while everyone spectates. Loser pays the stake — and busts out if they can't cover it |
+| ⚔️ | **Duel** | stake 0–200 | Challenge a living foe: you alternate guesses on a fresh word while everyone spectates. Loser pays the stake — and in Royale, busts out if they can't cover it |
 
 ## Difficulty (Classic & Royale)
 

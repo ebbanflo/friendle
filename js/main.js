@@ -175,7 +175,8 @@ function installDebug() {
       over: S.mirror.over,
       players: S.mirror.players.map((p) => ({ ...p })),
       round: S.mirror.round && {
-        no: S.mirror.round.no, phase: S.mirror.round.phase,
+        no: S.mirror.round.no, total: S.mirror.round.total,
+        phase: S.mirror.round.phase,
         setterId: S.mirror.round.setterId, pot: S.mirror.round.pot,
         tier: S.mirror.round.tier ?? null,
         done: { ...S.mirror.round.done },

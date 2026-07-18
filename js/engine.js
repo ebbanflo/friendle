@@ -155,7 +155,12 @@ export class Engine {
   }
 
   totalWords() {
-    return this.settings.mode === 'royale' ? 0 : this.settings.words;
+    if (this.settings.mode === 'royale') return 0;
+    if (this.settings.mode === 'friend') {
+      // "5 words" means 5 words EACH as setter: 3 players -> 15 rounds.
+      return this.settings.words * Math.max(1, this.activePlayers().length);
+    }
+    return this.settings.words;
   }
 
   nextWord() {
@@ -186,6 +191,8 @@ export class Engine {
       const act = this.activePlayers();
       this.setterCursor = (this.setterCursor + 1) % act.length;
       this.round.setterId = act[this.setterCursor].id;
+      // who gets the letter feed: the setter now, solvers as they solve
+      this.round.viewers = new Set([this.round.setterId]);
       this.round.phase = 'set';
       this.net.emit(EV.WORD, {
         no: this.round.no, total: this.totalWords(), phase: 'set',
@@ -322,11 +329,27 @@ export class Engine {
     this.net.emit(EV.RESULT, {
       pid: from, no: r.no, row: rows.length - 1, colors, solved, done,
     });
-    // FRIEND: the setter isn't competing - they get the actual letters, live.
-    if (this.settings.mode === 'friend' && r.setterId && r.setterId !== from) {
-      this.net.emit(EV.SETTER_LETTERS, {
-        to: r.setterId, pid: from, no: r.no, row: rows.length - 1, x: obf(word, this.code),
-      });
+    // FRIEND: everyone out of the race gets the actual letters, live - the
+    // setter from the start, and each solver from the moment they solve.
+    // Unsolved guessers are still competing and stay colors-only.
+    if (this.settings.mode === 'friend' && r.viewers) {
+      for (const viewer of r.viewers) {
+        if (viewer !== from) {
+          this.net.emit(EV.SETTER_LETTERS, {
+            to: viewer, pid: from, no: r.no, row: rows.length - 1, x: obf(word, this.code),
+          });
+        }
+      }
+      if (solved && !r.viewers.has(from)) {
+        r.viewers.add(from);
+        // backfill everything the new viewer missed while competing
+        for (const [pid, prows] of Object.entries(r.rows)) {
+          if (pid === from) continue;
+          prows.forEach((prow, i) => this.net.emit(EV.SETTER_LETTERS, {
+            to: from, pid, no: r.no, row: i, x: obf(prow.word, this.code),
+          }));
+        }
+      }
     }
 
     if (solved) this.recordSolve(from, rows.length - 1, Number(d.elapsed) || 0);
@@ -401,8 +424,32 @@ export class Engine {
         this.pot = 0;
       }
       // unsolved -> pot rolls over and grows
+    } else if (mode === 'friend') {
+      // FRIEND: ranked by FEWEST guesses, not time. Every solver earns the
+      // full formula (no speed bonus, no late cut) so 3 rows beats 6 rows
+      // regardless of who hit enter first; ties go to the earlier solve.
+      const solvers = Object.keys(r.done).filter((pid) => r.done[pid] === 'solved');
+      for (const pid of solvers) {
+        const p = this.player(pid);
+        if (!p) continue;
+        const pts = SCORING.base + (MAX_ROWS - this.rowsUsed(pid)) * SCORING.perRowSaved;
+        deltas[pid] = pts;
+        p.score += pts;
+      }
+      solvers.sort((a, b) => this.rowsUsed(a) - this.rowsUsed(b)
+        || ((r.elapsedBy || {})[a] ?? Infinity) - ((r.elapsedBy || {})[b] ?? Infinity));
+      r.winner = solvers[0] || null;
+      // the setter scores for EVERY guesser they stumped
+      const stumped = this.guessers().filter((g) => r.done[g.id] !== 'solved').length;
+      if (stumped > 0) {
+        const s = this.player(r.setterId);
+        if (s) {
+          deltas[r.setterId] = (deltas[r.setterId] || 0) + stumped * SCORING.setterPerStump;
+          s.score += stumped * SCORING.setterPerStump;
+        }
+      }
     } else {
-      // classic & friend: formula points, first solver full, later solvers a cut
+      // classic: formula points, first solver full, later solvers a cut
       for (const pid of r.solveOrder) {
         const p = this.player(pid);
         if (!p) continue;
@@ -413,10 +460,6 @@ export class Engine {
         const pts = pid === r.winner ? full : Math.round(full * SCORING.latePct);
         deltas[pid] = pts;
         p.score += pts;
-      }
-      if (mode === 'friend' && !r.winner) {
-        const s = this.player(r.setterId);
-        if (s) { deltas[r.setterId] = SCORING.setterPoints; s.score += SCORING.setterPoints; }
       }
     }
 
@@ -481,7 +524,6 @@ export class Engine {
 
     if (!item || !p) return;
     if (this.settings.mode === 'friend') return fail('No shop in FRIEND mode');
-    if (d.item === 'duel' && this.settings.mode !== 'royale') return fail('Duels are Royale-only');
     if (!r || r.phase !== 'play' || r.suspended || this.over) return fail('Not now');
     if (!p.alive || p.spectator) return fail('Spectators cannot buy');
     if (r.done[from] && d.item !== 'duel') return fail('You already finished this word');
@@ -617,8 +659,9 @@ export class Engine {
       const pay = Math.min(duel.stake, l.score);
       l.score -= pay;
       w.score += pay;
-      // Can't cover the stake -> busted out, regardless of the reveal cycle.
-      if (l.score <= 0 && duel.stake > 0) {
+      // Royale: can't cover the stake -> busted out. Classic has no
+      // elimination - the loser just walks away lighter.
+      if (this.settings.mode === 'royale' && l.score <= 0 && duel.stake > 0) {
         l.alive = false; l.spectator = true; eliminated.push(l.id);
       }
     }
@@ -734,8 +777,8 @@ export class Engine {
           rows.map((row) => ({
             colors: row.colors,
             // letters for the requester's own grid - and for every grid when
-            // the requester is the FRIEND setter (they watch letters live)
-            xword: id === pid || (this.settings.mode === 'friend' && r.setterId === pid)
+            // the requester has FRIEND letter-vision (setter, or a solver)
+            xword: id === pid || (this.settings.mode === 'friend' && r.viewers && r.viewers.has(pid))
               ? obf(row.word, this.code) : undefined,
             solved: row.word === r.word,
           })),

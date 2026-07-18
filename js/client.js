@@ -244,6 +244,7 @@ export class Mirror {
   onDuelStart(d) {
     this.duel = { a: d.a, b: d.b, stake: d.stake, rows: [], turn: d.a, over: false, result: null };
     if (this.round) this.round.suspended = true;
+    this.input = ''; // leftover mid-word typing must not bleed into the duel row
     this.fire('duelstart', d);
   }
 

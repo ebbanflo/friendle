@@ -22,12 +22,14 @@ export const COUNTDOWN_MS = 3000;   // "get ready" before each word unlocks
 export const TIMER_SLACK_MS = 750;  // host waits this beyond the timer before calling time
 
 export const SCORING = {
-  base: 100,           // first solver base
+  base: 100,           // solver base
   perRowSaved: 20,     // * (6 - rowsUsed)
-  speedMax: 50,        // decays to 0 over speedWindowMs
+  speedMax: 50,        // Classic: decays to 0 over speedWindowMs
   speedWindowMs: 60000,
-  latePct: 0.4,        // later solvers get this fraction of their own formula
-  setterPoints: 150,   // FRIEND: nobody solved -> setter scores
+  latePct: 0.4,        // Classic: later solvers get this fraction of their formula
+  // FRIEND: ranked by FEWEST guesses (not time); every solver gets the full
+  // base + perRowSaved formula, and the setter earns per stumped guesser.
+  setterPerStump: 100,
 };
 
 export const ROYALE = {
@@ -41,12 +43,12 @@ export const SHOP = {
   freeze: { price: 100, emoji: '\u{1F9CA}', name: 'Freeze', desc: "Lock all opponents' keyboards for 5 seconds", target: null },
   hint:   { price: 75,  emoji: '\u{1F4A1}', name: 'Hint',   desc: 'Reveal one green letter in your own grid', target: null },
   smudge: { price: 100, emoji: '\u{1F5D1}️', name: 'Smudge', desc: "Un-gray one letter on an opponent's keyboard", target: 'opponent' },
-  duel:   { price: 0,   emoji: '⚔️',  name: 'Duel',   desc: 'Royale only: stake points, alternate guesses on a fresh word', target: 'opponent' },
+  duel:   { price: 0,   emoji: '⚔️',  name: 'Duel',   desc: 'Stake points, alternate guesses on a fresh word (Classic & Royale)', target: 'opponent' },
 };
 export const FREEZE_MS = 5000;
 
 // FRIEND mode: the setter's heckling palette, one tap per guesser panel.
-export const REACTIONS = ['\u{1F602}', '\u{1F525}', '\u{1F631}', '\u{1F440}', '\u{1F480}', '\u{1FAE0}'];
+export const REACTIONS = ['\u{1F602}', '\u{1F525}', '\u{1F631}', '\u{1F440}', '\u{1F480}', '\u{1FAE0}', '\u{1F9E0}'];
 export const REACT_COOLDOWN_MS = 600; // host-enforced spam brake
 
 export const TIMER_CHOICES = [0, 60000, 90000, 120000]; // 0 = no timer
