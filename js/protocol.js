@@ -45,7 +45,8 @@ export const EV = {
   TOWER_WORD: 'twrword', // {pid, word, points, height, combo, stage}
   TOWER_MISS: 'twrmiss', // {pid, word, reason, lives, combo}
   TOWER_HUNGER: 'twrhunger', // {lives, downed}
-  TOWER_REVIVE: 'twrrev',    // {phase:'start'|'row'|'end', reviver, target, row?, word?, colors?, ok?, lives?, scores?, secret?}
+  TOWER_REVIVE: 'twrrev',    // {phase:'start'|'row'|'end', reviver, target, row?, word?, colors?, ok?, lives?, scores?, secret?, paused?, resumed?, hungerMs?, reason?}
+  TOWER_BONUS: 'twrbonus',   // {reason:'milestone'|'spelled', lives, height} - team-wide heart
   DUEL_START: 'duelstart', // {a, b, stake}
   DUEL_ROW: 'duelrow',   // {pid, row, word, colors, solved}
   DUEL_END: 'duelend',   // {winner, loser, stake, draw, word, scores, eliminated}

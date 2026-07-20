@@ -270,6 +270,7 @@ export class UI {
       case 'towermiss': this.renderTowerHud(); this.renderStrip(); this.renderShop(); this.shakeTower(); sfx.lose(); break;
       case 'towerhunger': this.renderTowerHud(); this.renderStrip(); this.renderShop(); sfx.lose(); break;
       case 'towerrev': this.onTowerRevive(d); break;
+      case 'towerbonus': this.onTowerBonus(d); break;
       case 'badguess': this.renderBoard(); this.shakeRow(); break;
       case 'shake': this.shakeRow(); sfx.invalid(); break;
       case 'toast': this.showToast(d.msg); break;
@@ -926,9 +927,13 @@ export class UI {
     const m = this.mirror;
     if (d.phase === 'end') {
       const t = m.player(d.target), r = m.player(d.reviver);
-      this.showToast(d.ok
-        ? `✨ ${r?.name} revived ${t?.name}!`
-        : `\u{1F480} revive failed — the word was "${(d.secret || '').toUpperCase()}"`);
+      if (d.reason === 'left') {
+        this.showToast(`\u{1F3C3} ${r?.name} left mid-revive — ${t?.name} stays down`);
+      } else {
+        this.showToast(d.ok
+          ? `✨ ${r?.name} revived ${t?.name}!`
+          : `\u{1F480} revive failed — the word was "${(d.secret || '').toUpperCase()}"`);
+      }
       (d.ok ? sfx.win : sfx.lose)();
     } else if (d.phase === 'start') {
       sfx.buy();
@@ -939,6 +944,20 @@ export class UI {
     this.renderTowerHud();
     this.renderStrip();
     this.renderShop();
+  }
+
+  onTowerBonus(d) {
+    this.renderStrip();
+    this.renderTowerHud();
+    if (d.reason === 'spelled') {
+      this.showToast('\u{1F5FC}✨ T-O-W-E-R! the tower blesses you — bonus hearts!');
+      sfx.pot();
+      const stack = document.getElementById('tower-stack');
+      if (stack) { stack.classList.remove('bonus-pulse'); void stack.offsetWidth; stack.classList.add('bonus-pulse'); }
+    } else {
+      this.showToast(`❤️ +1 heart for the team! (floor ${d.height})`);
+      sfx.heart();
+    }
   }
 
   renderRevive() {
@@ -1041,12 +1060,21 @@ export class UI {
   tick() {
     const m = this.mirror;
     if (!m || m.over) return;
-    // tower: drain the hunger bar
+    // tower: drain the hunger bar (frozen full + blue while any revive runs)
     if (m.settings?.mode === 'tower' && m.tower) {
-      const left = Math.max(0, m.tower.hungerAt - now());
-      const pct = Math.min(100, (left / m.tower.hungerMs) * 100);
-      $('hunger-fill').style.width = `${pct}%`;
-      $('hunger-fill').classList.toggle('starving', pct < 30);
+      const fill = $('hunger-fill');
+      if (m.tower.hungerPaused) {
+        fill.style.width = '100%';
+        fill.classList.remove('starving');
+        fill.classList.add('paused');
+      } else {
+        fill.classList.remove('paused');
+        const left = Math.max(0, m.tower.hungerAt - now());
+        const pct = Math.min(100, (left / m.tower.hungerMs) * 100);
+        fill.style.width = `${pct}%`;
+        fill.classList.toggle('starving', pct < 30);
+      }
+      $('hunger-label').classList.toggle('hidden', !m.tower.hungerPaused);
       return;
     }
     if (!m.round) return;

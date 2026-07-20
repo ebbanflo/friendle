@@ -479,7 +479,13 @@ input[type="text"], #inp-name, #inp-code {
   transition: width .25s linear;
 }
 #hunger-fill.starving { animation: pot-pulse .5s ease-in-out infinite; background: #ff3b3b; }
+#hunger-fill.paused { background: linear-gradient(90deg, #4fd3ff, #7b5bff); animation: pot-pulse 2s ease-in-out infinite; }
+.hunger-label {
+  font-size: .72rem; font-weight: 800; letter-spacing: .06em; color: #8fe0ff;
+  text-shadow: 0 0 8px rgba(80, 200, 255, .6); margin-top: .1rem;
+}
 .tower-stack { display: flex; flex-direction: column-reverse; gap: .22rem; min-height: 8rem; justify-content: flex-start; }
+.tower-stack.bonus-pulse { animation: cascade 1s ease; }
 .tower-row {
   display: flex; gap: .2rem; align-items: center;
   animation: tower-land .3s ease-out;

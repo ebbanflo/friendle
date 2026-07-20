@@ -65,6 +65,7 @@ export class Mirror {
       [EV.TOWER_MISS]: (d) => this.onTowerMiss(d),
       [EV.TOWER_HUNGER]: (d) => this.onTowerHunger(d),
       [EV.TOWER_REVIVE]: (d) => this.onTowerRevive(d),
+      [EV.TOWER_BONUS]: (d) => this.onTowerBonus(d),
       [EV.DUEL_START]: (d) => this.onDuelStart(d),
       [EV.DUEL_ROW]: (d) => this.onDuelRow(d),
       [EV.DUEL_END]: (d) => this.onDuelEnd(d),
@@ -262,7 +263,9 @@ export class Mirror {
     t.combo = d.combo;
     t.hungerMs = d.hungerMs;
     t.lives = d.lives;
-    t.hungerAt = now() + d.hungerMs;
+    // a stage-change broadcast can land mid-revive (another player kept
+    // climbing while paused) - don't resurrect a countdown that should stay frozen
+    if (!t.hungerPaused) t.hungerAt = now() + d.hungerMs;
     this.applyScores(d.scores);
     this.fire('tower', d);
   }
@@ -275,7 +278,7 @@ export class Mirror {
     t.height = d.height;
     t.combo = d.combo;
     t.stage = d.stage;
-    t.hungerAt = now() + t.hungerMs;
+    if (!t.hungerPaused) t.hungerAt = now() + t.hungerMs;
     const p = this.player(d.pid);
     if (p) p.score += d.points; // lean protocol: deltas, not snapshots
     if (d.pid === this.selfId) this.pendingTower = 0;
@@ -309,6 +312,7 @@ export class Mirror {
     if (!t) return;
     if (d.phase === 'start') {
       t.revives[d.reviver] = { target: d.target, rows: [] };
+      if (d.paused) { t.hungerPaused = true; t.hungerAt = null; }
       if (d.reviver === this.selfId) { this.input = ''; this.pendingTower = 0; }
     } else if (d.phase === 'row') {
       const rev = t.revives[d.reviver];
@@ -317,9 +321,16 @@ export class Mirror {
     } else if (d.phase === 'end') {
       delete t.revives[d.reviver];
       if (d.lives) t.lives = d.lives;
+      if (d.resumed) { t.hungerPaused = false; t.hungerAt = now() + t.hungerMs; }
       if (d.reviver === this.selfId) this.pendingTower = 0;
     }
     this.fire('towerrev', d);
+  }
+
+  onTowerBonus(d) {
+    const t = this.tower;
+    if (t) t.lives = d.lives;
+    this.fire('towerbonus', d);
   }
 
   myRevive() {
@@ -433,11 +444,13 @@ export class Mirror {
       this.duel = { a: s.duel.a, b: s.duel.b, stake: s.duel.stake, turn: s.duel.turn, over: false, result: null, rows: s.duel.rows.map((x) => ({ ...x })) };
     }
     if (s.tower) {
+      const hungerPaused = !!s.tower.hungerPaused;
       this.tower = {
         stage: s.tower.stage, constraint: s.tower.constraint,
         height: s.tower.height, combo: s.tower.combo,
         hungerMs: s.tower.hungerMs, lives: { ...s.tower.lives },
-        hungerAt: now() + s.tower.hungerMs,
+        hungerPaused,
+        hungerAt: hungerPaused ? null : now() + s.tower.hungerMs,
         rows: s.tower.rows.map((r) => ({ ...r })),
         revives: Object.fromEntries((s.tower.reviving || []).map((r) => [
           r.reviver, { target: r.target, rows: r.rows.map((x) => ({ ...x })) },

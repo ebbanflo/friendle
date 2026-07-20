@@ -53,6 +53,7 @@ export const FREEZE_MS = 5000;
 // moving; scores are RPG-huge on purpose.
 export const TOWER = {
   lives: 3,
+  maxLives: 5,             // cap for bonus hearts (milestones/easter eggs)
   reviveCost: 5000,
   reviveLives: 2,          // a revived teammate comes back with 2
   rampWords: { easy: 20, medium: 12, hard: 7 }, // words per decree stage
@@ -61,6 +62,7 @@ export const TOWER = {
   perLetterValue: 50,      // * scrabble-ish letter value
   comboPct: 0.1,           // * combo count, multiplicative
   minWordsPerDecree: 4,    // a decree must leave at least this many words possible
+  heartEveryHeight: 10,    // team-wide bonus heart every N floors climbed
 };
 export const LETTER_VALUES = {
   a: 1, e: 1, i: 1, o: 1, u: 1, l: 1, n: 1, s: 1, t: 1, r: 1,

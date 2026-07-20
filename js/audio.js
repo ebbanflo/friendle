@@ -80,4 +80,5 @@ export const sfx = {
   join: () => tone({ freq: 660, type: 'triangle', dur: 0.12, gain: 0.3, slide: 200 }),
   pop: () => { tone({ freq: 880, type: 'sine', dur: 0.06, gain: 0.3, slide: 300 }); tone({ freq: 1320, type: 'triangle', dur: 0.08, gain: 0.2, at: 0.05 }); },
   reveal: () => tone({ freq: 440, type: 'sine', dur: 0.3, gain: 0.25, slide: 220 }),
+  heart: () => [988, 1318, 1568].forEach((f, i) => tone({ freq: f, type: 'sine', dur: 0.12, gain: 0.28, at: i * 0.07 })),
 };

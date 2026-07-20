@@ -142,17 +142,45 @@ reveal cycle. Solo starts are allowed (`minPlayers()` is 1 for tower).
 Protocol: `twr` (full state on start/stage-change), `twrword` (accepted word:
 clients apply the score DELTA locally - lean protocol), `twrmiss` (life
 lost), `twrhunger` (silence bled everyone), `twrrev` (revive minigame
-start/row/end - letters are public, it's co-op). Rules live in `js/tower.js`
-(pure, node-importable, unit-tested): decree generation walks 8 escalation
-tiers then piles on bans; every generated decree is verified to leave at
-least `minWordsPerDecree` unused dictionary words. Tower submissions are NOT
+start/row/end - letters are public, it's co-op), `twrbonus` (team-wide heart:
+`reason` is `'milestone'` or `'spelled'`). Rules live in `js/tower.js` (pure,
+node-importable, unit-tested): decree generation walks 8 escalation tiers
+then piles on bans; every generated decree is verified to leave at least
+`minWordsPerDecree` unused dictionary words. Tower submissions are NOT
 pre-validated client-side - pressing enter on a bad word is how lives are
 lost, by design (only the revive wordle gets the friendly local dictionary
-check). The hunger timer re-arms on every accepted word; `settings.rampWords`
-/ `settings.hungerMs` are debug-only overrides used by tests. LEVEL in tower
-means ramp speed (easy 20 / medium 12 / hard 7 words per stage);
-standard/ramp fall back to medium. Scoring is deliberately RPG-huge
-(`wordPoints`: base + letter values, x stage, x combo).
+check). `settings.rampWords` / `settings.hungerMs` are debug-only overrides
+used by tests. LEVEL in tower means ramp speed (easy 20 / medium 12 / hard 7
+words per stage); standard/ramp fall back to medium. Scoring is deliberately
+RPG-huge (`wordPoints`: base + letter values, x stage, x combo).
+
+**Bonus hearts.** `engine.grantHearts(reason)` adds one life to every active
+player, capped at `TOWER.maxLives` (5) - including anyone currently at 0,
+which is a deliberate "team saved them" revive-via-milestone. Two triggers,
+both checked in `onTowerGuess` right after a word is accepted: (1) a height
+multiple of `TOWER.heartEveryHeight` (10) - `Math.floor(height/N) >
+Math.floor((height-1)/N)` catches the crossing regardless of how many words
+land at once; (2) `checkTowerSpelled()` - the newest 5 rows in `t.rows`, any
+single column, read in placement order, equal `'tower'`. Only the newest
+window needs checking on each word: any 5-row window's *last* row is unique,
+so checking at the moment that row lands covers every possible window
+exactly once (no need to rescan history). Both can fire on the same word
+(stacking is intended, not a bug).
+
+**Revive pauses the hunger clock.** `pauseHungerForRevive()` /
+`resumeHungerIfIdle()` gate on `Object.keys(tower.revives).length` so
+concurrent revives don't fight: the clock pauses on the first revive to
+start and only resumes (with a FRESH full window, not leftover time) when
+the last one ends - success, failure, or the reviver disconnecting mid-puzzle
+(`onLeave` synthesizes a `twrrev` `phase:'end', reason:'left'` so the client
+UI doesn't leave a stale rescue panel on screen forever). Trap: a
+NON-reviving player can still submit ordinary tower words while a teammate
+reviving someone else is mid-puzzle - `onTowerGuess`'s success path must
+check `hungerPaused` before re-arming, or a bystander's climb would silently
+un-pause a clock that's supposed to stay frozen. Client mirrors the same
+guard (`onTower`/`onTowerWord` skip touching `hungerAt` while
+`tower.hungerPaused`), because a stage-change broadcast can land mid-revive
+too.
 
 ## Known traps (each one bit us or will bite you)
 

@@ -164,6 +164,8 @@ function installDebug() {
         combo: S.engine.tower.combo, constraint: S.engine.tower.constraint,
         lives: { ...S.engine.tower.lives }, used: S.engine.tower.used.size,
         rampWords: S.engine.tower.rampWords, hungerMs: S.engine.tower.hungerMs,
+        hungerPaused: !!S.engine.tower.hungerPaused,
+        revives: Object.keys(S.engine.tower.revives),
       },
       round: S.engine.round && {
         no: S.engine.round.no, phase: S.engine.round.phase,
@@ -202,6 +204,7 @@ function installDebug() {
         stage: S.mirror.tower.stage, height: S.mirror.tower.height,
         combo: S.mirror.tower.combo, constraint: S.mirror.tower.constraint,
         lives: { ...S.mirror.tower.lives },
+        hungerPaused: !!S.mirror.tower.hungerPaused,
         rows: S.mirror.tower.rows.map((r) => ({ ...r })),
         revives: Object.fromEntries(Object.entries(S.mirror.tower.revives).map(([k, v]) => [
           k, { target: v.target, rows: v.rows.map((x) => ({ ...x })) },

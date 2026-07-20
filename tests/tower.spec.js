@@ -182,4 +182,157 @@ test.describe('tower mode', () => {
     expect(over.reason).toBe('the tower fell');
     expect(over.height).toBe(3);
   });
+
+  test('bonus hearts: every 10th floor revives a downed teammate; capped at max', async ({ context }) => {
+    test.setTimeout(90000);
+    const host = await openPage(context);
+    const code = await hostGame(host, 'PRIEST', {
+      ...FAST, mode: 'tower', difficulty: 'hard', rampWords: 999, hungerMs: 600000,
+    });
+    const pA = await openPage(context);
+    await joinGame(pA, code, 'DOWNED');
+    await host.waitForFunction(() => window.__friendle.state().players.length === 2);
+    const aId = await pA.evaluate(() => window.__friendle.selfId);
+    await startGame(host, [host, pA]);
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await pA.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+
+    // no decree noise: any distinct dictionary word is acceptable
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+
+    // A flames out completely (3 misses) while the tower keeps climbing
+    await miss(pA, 'zzzzz');
+    await miss(pA, 'qqqqq');
+    await miss(pA, 'jjjjj');
+    await pA.waitForFunction(() => window.__friendle.state().inputLocked, null, { polling: 100 });
+    expect((await towerState(host)).lives[aId]).toBe(0);
+
+    // host climbs 10 distinct words alone -> height-10 milestone fires
+    const words = GUESSES.filter((w) => /^[a-z]{5}$/.test(w)).slice(0, 30);
+    let placed = 0;
+    for (const w of words) {
+      if (placed >= 10) break;
+      const used = new Set(await usedWords(host));
+      if (used.has(w)) continue;
+      await climb(host, w);
+      placed += 1;
+    }
+    expect(placed).toBe(10);
+
+    await host.waitForFunction(() => window.__friendle.state().tower.height === 10, null, { polling: 100 });
+    // the milestone revived the downed teammate...
+    await pA.waitForFunction((id) => window.__friendle.state().tower.lives[id] === 1, aId, { polling: 100 });
+    await pA.waitForFunction(() => !window.__friendle.state().inputLocked, null, { polling: 100 });
+    // ...and the host (who never lost a life) gained one too, capped by maxLives
+    const hostId = await host.evaluate(() => window.__friendle.selfId);
+    let t = await towerState(host);
+    expect(t.lives[hostId]).toBe(4); // 3 start + 1 milestone
+    expect(t.lives[aId]).toBe(1);    // 0 -> revived to 1
+
+    // grind to height 50 (5 milestones) to prove the cap holds
+    const usedSoFar = new Set(await usedWords(host));
+    const more = GUESSES.filter((w) => /^[a-z]{5}$/.test(w) && !usedSoFar.has(w)).slice(0, 60);
+    let extra = 0;
+    for (const w of more) {
+      if (host && (await towerState(host)).height >= 50) break;
+      const used = new Set(await usedWords(host));
+      if (used.has(w)) continue;
+      await climb(host, w);
+      extra += 1;
+      if (extra > 45) break; // safety valve
+    }
+    t = await towerState(host);
+    expect(t.height).toBeGreaterThanOrEqual(50);
+    expect(t.lives[hostId]).toBe(5); // capped at maxLives, not 8
+  });
+
+  test('the tower blessing: spelling TOWER down a column grants a bonus heart', async ({ context }) => {
+    test.setTimeout(60000);
+    const host = await openPage(context);
+    await hostGame(host, 'BARD', {
+      ...FAST, mode: 'tower', difficulty: 'medium', rampWords: 999, hungerMs: 600000,
+    });
+    await host.click('#btn-start');
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    const hostId = await host.evaluate(() => window.__friendle.selfId);
+
+    // clear the decree so any word starting with the target letter qualifies
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+
+    // five real words whose FIRST letters spell T-O-W-E-R down the column
+    const wordStartingWith = (ch) => GUESSES.find((w) => /^[a-z]{5}$/.test(w) && w[0] === ch);
+    const towerWords = ['t', 'o', 'w', 'e', 'r'].map(wordStartingWith);
+    expect(towerWords.every(Boolean)).toBe(true);
+    expect(new Set(towerWords).size).toBe(5); // distinct starting letters => distinct words
+
+    for (const w of towerWords.slice(0, 4)) await climb(host, w);
+    let t = await towerState(host);
+    const before = t.lives[hostId];
+    expect(t.height).toBe(4); // not a height-10 milestone - isolates the easter egg
+
+    await climb(host, towerWords[4]);
+    await host.waitForFunction((b) => window.__friendle.state().tower.lives[window.__friendle.selfId] === b + 1, before, { polling: 100 });
+    t = await towerState(host);
+    expect(t.height).toBe(5);
+    expect(t.lives[hostId]).toBe(before + 1);
+    await expect(host.locator('#toast')).toContainText('T-O-W-E-R');
+  });
+
+  test('revive pauses the shared hunger clock; a bystander can keep climbing; resumes fresh after', async ({ context }) => {
+    test.setTimeout(60000);
+    const host = await openPage(context);
+    const code = await hostGame(host, 'MONK', {
+      ...FAST, mode: 'tower', difficulty: 'hard', rampWords: 999, hungerMs: 900,
+    });
+    const pA = await openPage(context); // will go down, gets revived
+    await joinGame(pA, code, 'CASTER');
+    const pB = await openPage(context); // bystander: neither reviving nor downed
+    await joinGame(pB, code, 'ROGUE');
+    await host.waitForFunction(() => window.__friendle.state().players.length === 3);
+    const hostId = await host.evaluate(() => window.__friendle.selfId);
+    const aId = await pA.evaluate(() => window.__friendle.selfId);
+    await startGame(host, [host, pA, pB]);
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await pA.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await pB.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+
+    // A goes down; host and B stay up
+    await miss(pA, 'zzzzz');
+    await miss(pA, 'qqqqq');
+    await miss(pA, 'jjjjj');
+    await pA.waitForFunction(() => window.__friendle.state().inputLocked, null, { polling: 100 });
+
+    await setScore(host, hostId, 50000);
+    await host.click('[data-testid="shop-revive"]');
+    await host.click(`[data-testid="pick-${aId}"]`);
+    await host.click('#btn-picker-go');
+    await host.waitForFunction(() => !!window.__friendle.state().tower.revives[window.__friendle.selfId], null, { polling: 100 });
+    expect((await towerState(host)).hungerPaused).toBe(true);
+    await expect(host.locator('#hunger-label')).toBeVisible();
+    await pB.waitForFunction(() => window.__friendle.state().tower.hungerPaused, null, { polling: 100 });
+
+    // sit well past hungerMs (900ms) WITHOUT finishing the revive - nobody should bleed
+    const livesBefore = (await towerState(host)).lives;
+    await host.waitForTimeout(1800);
+    expect((await towerState(host)).lives).toEqual(livesBefore); // the clock never fired while paused
+
+    // a completely uninvolved bystander can still climb normally mid-pause
+    const bystanderWord = GUESSES.find((w) => /^[a-z]{5}$/.test(w) && !w.startsWith('a'));
+    await climb(pB, bystanderWord);
+    expect((await towerState(pB)).height).toBe(1);
+
+    // now solve the revive
+    const secret = await host.evaluate((pid) => window.__friendle.reviveSecret(pid), hostId);
+    await host.evaluate((w) => window.__friendle.guess(w), secret);
+    await pA.waitForFunction((id) => window.__friendle.state().tower.lives[id] === 2, aId, { polling: 100 });
+    await host.waitForFunction(() => !window.__friendle.state().tower.hungerPaused, null, { polling: 100 });
+    await expect(host.locator('#hunger-label')).toBeHidden();
+
+    // the clock resumed fresh: waiting past hungerMs again now DOES bleed
+    await host.waitForFunction(([h, a, b]) => {
+      const lv = window.__friendle.state().tower.lives;
+      return lv[h] < 3 || lv[a] < 2 || lv[b] < 3; // someone bled after resume
+    }, [hostId, aId, await pB.evaluate(() => window.__friendle.selfId)], { polling: 100, timeout: 15000 });
+  });
 });

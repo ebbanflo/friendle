@@ -64,8 +64,19 @@ Everyone has **3 lives**. A submission that isn't a real word, repeats the
 tower, or breaks the decree costs one — and so does silence: leave the
 hunger bar to empty and *everyone* bleeds. Lose them all and you're down,
 until a teammate spends points on ✨ **Revive** — a classic solo Wordle where
-solving brings you back with 2 lives. When the whole team is down, the tower
-falls; your height is the trophy.
+solving brings you back with 2 lives. **Reviving stops the clock**: the
+hunger bar freezes (blue, "⏸ REVIVING — TIMER PAUSED") the moment anyone
+starts a rescue, so it's a fully untimed puzzle — everyone else can keep
+climbing in the meantime. It resumes fresh the instant the last active
+revive ends. When the whole team is down, the tower falls; your height is
+the trophy.
+
+The tower rewards you for surviving: **every 10th floor**, the whole team
+gets a bonus heart — and if anyone's currently down, that heart brings them
+back. And keep an eye on the stack: if the letters in any single column of
+5 consecutive floors happen to spell **T-O-W-E-R**, the tower blesses you
+with a bonus heart for everyone, no matter the height. Hearts cap at 5, so
+hoard wisely.
 
 Scoring is full RPG: huge glowing numbers, stage multipliers, team combos,
 and +damage popping off every word. Fill the screen.

@@ -8,7 +8,7 @@
 // color-result strings and score deltas go over the wire.
 
 import {
-  MAX_PLAYERS, MIN_PLAYERS, MAX_ROWS, GRACE_MS, COUNTDOWN_MS, TIMER_SLACK_MS,
+  MAX_PLAYERS, MIN_PLAYERS, MAX_ROWS, WORD_LEN, GRACE_MS, COUNTDOWN_MS, TIMER_SLACK_MS,
   SCORING, ROYALE, SHOP, FREEZE_MS, DEFAULT_SETTINGS, PLAYER_COLORS, LEAVE_GRACE_MS,
   REACTIONS, REACT_COOLDOWN_MS, TOWER,
 } from './config.js';
@@ -369,6 +369,52 @@ export class Engine {
     return this.activePlayers().every((p) => (this.tower.lives[p.id] ?? 0) <= 0);
   }
 
+  // Team-wide bonus heart (milestone every N floors, or the TOWER easter
+  // egg). Revives anyone currently downed - "everyone gets a heart" is
+  // literal, including whoever's at zero.
+  grantHearts(reason) {
+    const t = this.tower;
+    for (const p of this.activePlayers()) {
+      const cur = t.lives[p.id] ?? 0;
+      t.lives[p.id] = Math.min(TOWER.maxLives, cur + 1);
+    }
+    this.net.emit(EV.TOWER_BONUS, { reason, lives: { ...t.lives }, height: t.height });
+  }
+
+  // Easter egg: if the most recently placed 5 words, read down any single
+  // column, spell T-O-W-E-R, the tower itself blesses the climbers.
+  checkTowerSpelled() {
+    const t = this.tower;
+    if (t.height < 5) return false;
+    const window = t.rows.slice(-5);
+    if (window.length < 5) return false;
+    for (let col = 0; col < WORD_LEN; col++) {
+      let s = '';
+      for (const row of window) s += row.word[col];
+      if (s === 'tower') return true;
+    }
+    return false;
+  }
+
+  // A revive is meant to be an untimed puzzle: the shared hunger clock
+  // pauses while ANY revive is in flight, and only resumes (with a fresh
+  // full window) once none remain. Other players may keep climbing while
+  // paused - only the clock itself stops.
+  pauseHungerForRevive() {
+    const t = this.tower;
+    if (t.hungerPaused) return;
+    t.hungerPaused = true;
+    clearTimeout(this.timers.hunger);
+  }
+
+  resumeHungerIfIdle() {
+    const t = this.tower;
+    if (!t.hungerPaused || Object.keys(t.revives).length > 0) return false;
+    t.hungerPaused = false;
+    this.armHunger();
+    return true;
+  }
+
   onTowerGuess(d, from) {
     const t = this.tower;
     if (!t || this.over) return;
@@ -397,7 +443,16 @@ export class Engine {
     this.net.emit(EV.TOWER_WORD, {
       pid: from, word, points, height: t.height, combo: t.combo, stage: t.stage,
     });
-    this.armHunger();
+    // While a revive is in flight the clock stays paused regardless of what
+    // OTHER (non-reviving) players do - only the last revive ending re-arms it.
+    if (!t.hungerPaused) this.armHunger();
+
+    if (Math.floor(t.height / TOWER.heartEveryHeight) > Math.floor((t.height - 1) / TOWER.heartEveryHeight)) {
+      this.grantHearts('milestone');
+    }
+    if (this.checkTowerSpelled()) {
+      this.grantHearts('spelled');
+    }
 
     if (t.wordsInStage >= t.rampWords) {
       t.stage += 1;
@@ -430,8 +485,9 @@ export class Engine {
     const word = pickWord(this.usedWords, 'easy'); // rescues are merciful
     this.usedWords.add(word);
     t.revives[from] = { target: target.id, word, rows: [] };
+    this.pauseHungerForRevive();
     this.net.emit(EV.SCORES, { scores: this.scoreMap(), buyer: from, item: 'revive' });
-    this.net.emit(EV.TOWER_REVIVE, { phase: 'start', reviver: from, target: target.id });
+    this.net.emit(EV.TOWER_REVIVE, { phase: 'start', reviver: from, target: target.id, paused: true });
   }
 
   onReviveGuess(word, from) {
@@ -453,9 +509,10 @@ export class Engine {
     if (solved || rev.rows.length >= MAX_ROWS) {
       delete t.revives[from];
       if (solved) t.lives[rev.target] = TOWER.reviveLives;
+      const resumed = this.resumeHungerIfIdle();
       this.net.emit(EV.TOWER_REVIVE, {
         phase: 'end', reviver: from, target: rev.target, ok: solved,
-        lives: { ...t.lives }, secret: rev.word,
+        lives: { ...t.lives }, secret: rev.word, resumed, hungerMs: t.hungerMs,
       });
     }
   }
@@ -927,10 +984,19 @@ export class Engine {
       }
     }
 
-    // Tower: a leaver's revive fizzles (points stay spent), and the run ends
-    // if only downed players remain.
+    // Tower: a leaver's revive fizzles (points stay spent, teammate stays
+    // down) - the hunger clock resumes if that was the last active revive.
+    // The run ends if only downed players remain.
     if (this.settings.mode === 'tower' && this.tower) {
-      if (this.tower.revives[pid]) delete this.tower.revives[pid];
+      const rev = this.tower.revives[pid];
+      if (rev) {
+        delete this.tower.revives[pid];
+        const resumed = this.resumeHungerIfIdle();
+        this.net.emit(EV.TOWER_REVIVE, {
+          phase: 'end', reviver: pid, target: rev.target, ok: false, secret: rev.word,
+          lives: { ...this.tower.lives }, resumed, hungerMs: this.tower.hungerMs, reason: 'left',
+        });
+      }
       if (this.activePlayers().length === 0 || this.everyoneDowned()) { this.endTower(); return; }
     }
 
@@ -980,6 +1046,7 @@ export class Engine {
         stage: this.tower.stage, constraint: this.tower.constraint,
         height: this.tower.height, combo: this.tower.combo,
         hungerMs: this.tower.hungerMs, lives: { ...this.tower.lives },
+        hungerPaused: !!this.tower.hungerPaused,
         rows: this.tower.rows.slice(-40),
         reviving: Object.entries(this.tower.revives).map(([rev, s]) => ({
           reviver: rev, target: s.target,
