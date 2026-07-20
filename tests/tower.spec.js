@@ -64,7 +64,7 @@ test.describe('tower mode', () => {
     test.setTimeout(90000);
     const host = await openPage(context);
     await hostGame(host, 'MASON', {
-      ...FAST, mode: 'tower', difficulty: 'easy', rampWords: 2, hungerMs: 600000,
+      ...FAST, mode: 'tower', rampWords: 2, hungerMs: 600000,
     });
     // solo start is allowed in TOWER
     await expect(host.locator('#btn-start')).toBeEnabled();
@@ -114,7 +114,7 @@ test.describe('tower mode', () => {
     test.setTimeout(90000);
     const host = await openPage(context);
     const code = await hostGame(host, 'CLERIC', {
-      ...FAST, mode: 'tower', difficulty: 'medium', rampWords: 50, hungerMs: 600000,
+      ...FAST, mode: 'tower', rampWords: 50, hungerMs: 600000,
     });
     const pA = await openPage(context);
     await joinGame(pA, code, 'FALLEN');
@@ -187,7 +187,7 @@ test.describe('tower mode', () => {
     test.setTimeout(90000);
     const host = await openPage(context);
     const code = await hostGame(host, 'PRIEST', {
-      ...FAST, mode: 'tower', difficulty: 'hard', rampWords: 999, hungerMs: 600000,
+      ...FAST, mode: 'tower', rampWords: 999, hungerMs: 600000,
     });
     const pA = await openPage(context);
     await joinGame(pA, code, 'DOWNED');
@@ -250,7 +250,7 @@ test.describe('tower mode', () => {
     test.setTimeout(60000);
     const host = await openPage(context);
     await hostGame(host, 'BARD', {
-      ...FAST, mode: 'tower', difficulty: 'medium', rampWords: 999, hungerMs: 600000,
+      ...FAST, mode: 'tower', rampWords: 999, hungerMs: 600000,
     });
     await host.click('#btn-start');
     await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
@@ -282,7 +282,7 @@ test.describe('tower mode', () => {
     test.setTimeout(60000);
     const host = await openPage(context);
     const code = await hostGame(host, 'MONK', {
-      ...FAST, mode: 'tower', difficulty: 'hard', rampWords: 999, hungerMs: 900,
+      ...FAST, mode: 'tower', rampWords: 999, hungerMs: 900,
     });
     const pA = await openPage(context); // will go down, gets revived
     await joinGame(pA, code, 'CASTER');
@@ -334,5 +334,43 @@ test.describe('tower mode', () => {
       const lv = window.__friendle.state().tower.lives;
       return lv[h] < 3 || lv[a] < 2 || lv[b] < 3; // someone bled after resume
     }, [hostId, aId, await pB.evaluate(() => window.__friendle.selfId)], { polling: 100, timeout: 15000 });
+  });
+
+  test('lobby DECREE slider: host drags it, 2-10 range, live-syncs to guests, drives real pacing', async ({ context }) => {
+    const host = await openPage(context);
+    const code = await hostGame(host, 'DEALER', FAST);
+    const guest = await openPage(context);
+    await joinGame(guest, code, 'WATCH');
+    await host.waitForFunction(() => window.__friendle.state().players.length === 2);
+
+    // switch to TOWER: the old EASY/MED/HARD/STD/RAMP row disappears,
+    // the DECREE slider appears instead, defaulted mid-range
+    await host.evaluate(() => window.__friendle.setSettings({ mode: 'tower' }));
+    await expect(host.locator('#set-diff')).toBeHidden();
+    await expect(host.locator('#set-ramp')).toBeVisible();
+    const range = host.locator('#ramp-range');
+    await expect(range).toHaveAttribute('min', '2');
+    await expect(range).toHaveAttribute('max', '10');
+    expect(await range.inputValue()).toBe('5'); // TOWER.defaultRampWords
+
+    // guest cannot drag it (not host) - reflected as disabled
+    await expect(guest.locator('#ramp-range')).toBeDisabled();
+
+    // host drags to 2 (the "easy" end, per the counterintuitive finding);
+    // fill() on a range input fires input+change, matching real drag behavior
+    await range.fill('2');
+    await guest.waitForFunction(() => window.__friendle.state().settings?.rampWords === 2, null, { polling: 100 });
+    expect(await guest.locator('#ramp-out').textContent()).toBe('2');
+
+    // and it actually drives pacing: stage 2 arrives after just 2 words
+    await startGame(host, [host, guest]);
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+    expect((await host.evaluate(() => window.__friendle.engineState().tower)).rampWords).toBe(2);
+    const words = GUESSES.filter((w) => /^[a-z]{5}$/.test(w)).slice(0, 5);
+    await climb(host, words[0]);
+    expect((await towerState(host)).stage).toBe(1);
+    await climb(host, words[1]);
+    await host.waitForFunction(() => window.__friendle.state().tower.stage === 2, null, { polling: 100 });
   });
 });

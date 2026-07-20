@@ -183,6 +183,7 @@ function installDebug() {
       hostId: S.mirror.hostId,
       started: S.mirror.started,
       over: S.mirror.over,
+      settings: S.mirror.settings && { ...S.mirror.settings },
       players: S.mirror.players.map((p) => ({ ...p })),
       round: S.mirror.round && {
         no: S.mirror.round.no, total: S.mirror.round.total,

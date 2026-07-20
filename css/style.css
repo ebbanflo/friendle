@@ -177,6 +177,10 @@ input[type="text"], #inp-name, #inp-code {
 .setting { display: flex; align-items: center; gap: .7rem; }
 .setting-label { width: 3.6rem; text-align: right; color: var(--muted); font-size: .8rem; letter-spacing: .1em; }
 .seg { display: flex; flex: 1; gap: .3rem; }
+.ramp-slider { display: flex; flex: 1; align-items: center; gap: .5rem; }
+.ramp-slider input[type="range"] { flex: 1; accent-color: #ffd76a; }
+.ramp-slider output { color: #ffd76a; font-weight: 900; font-size: 1rem; min-width: 1.2em; text-align: center; }
+.ramp-slider .ramp-unit { color: var(--muted); font-size: .78rem; letter-spacing: .05em; }
 .seg-btn {
   flex: 1; padding: .5rem .3rem; border-radius: .4rem; font-size: .85rem; font-weight: 700;
   background: #1c1c1d; border: 1px solid var(--tile-border); color: var(--muted);

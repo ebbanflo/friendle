@@ -57,8 +57,11 @@ welcome), endless. The team races to stack real 5-letter words into a tower,
 but every word must obey the **DECREE** at the top of the screen — and the
 decree escalates: use this letter → use two → a letter in a specific slot →
 two slotted letters → forbidden letters → **NO VOWELS**, and it keeps
-twisting from there. The LEVEL setting controls the climb speed (easy ≈ every
-20 words, medium 12, hard 7).
+twisting from there. The host sets **DECREE** directly — a slider from 2 to
+10 words per stage. Counterintuitively, *lower is easier*: a small number
+cycles you to a fresh constraint before your collective vocabulary for the
+current one runs dry, while a high number forces the team to keep digging
+for distinct words under the same brutal rule until you're stuck.
 
 Everyone has **3 lives**. A submission that isn't a real word, repeats the
 tower, or breaks the decree costs one — and so does silence: leave the

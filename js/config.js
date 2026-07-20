@@ -56,14 +56,22 @@ export const TOWER = {
   maxLives: 5,             // cap for bonus hearts (milestones/easter eggs)
   reviveCost: 5000,
   reviveLives: 2,          // a revived teammate comes back with 2
-  rampWords: { easy: 20, medium: 12, hard: 7 }, // words per decree stage
-  hungerMs: { easy: 45000, medium: 35000, hard: 25000 }, // silence = everyone bleeds
+  // Words needed per decree before it escalates - host-set directly (see
+  // RAMP_WORDS_MIN/MAX below), NOT tied to an easy/medium/hard label.
+  // Counterintuitively, a LOW count plays easier: the team cycles to a
+  // fresh (often gentler) constraint before their collective vocabulary for
+  // any one decree runs dry; a HIGH count forces them to keep finding
+  // distinct words under the SAME brutal constraint until they're stuck.
+  defaultRampWords: 5,
+  hungerMs: 35000,         // silence = everyone bleeds (flat, not difficulty-tied)
   base: 500,               // per-word base, before letter values and stage
   perLetterValue: 50,      // * scrabble-ish letter value
   comboPct: 0.1,           // * combo count, multiplicative
   minWordsPerDecree: 4,    // a decree must leave at least this many words possible
   heartEveryHeight: 10,    // team-wide bonus heart every N floors climbed
 };
+export const RAMP_WORDS_MIN = 2;
+export const RAMP_WORDS_MAX = 10;
 export const LETTER_VALUES = {
   a: 1, e: 1, i: 1, o: 1, u: 1, l: 1, n: 1, s: 1, t: 1, r: 1,
   d: 2, g: 2, b: 3, c: 3, m: 3, p: 3, f: 4, h: 4, v: 4, w: 4, y: 4,
@@ -83,10 +91,11 @@ export const WORDS_CHOICES = [3, 5, 10];
 export const DIFFICULTY_CHOICES = ['standard', 'easy', 'medium', 'hard', 'ramp'];
 
 export const DEFAULT_SETTINGS = {
-  mode: 'classic',        // 'classic' | 'royale' | 'friend'
+  mode: 'classic',        // 'classic' | 'royale' | 'friend' | 'tower'
   words: 5,               // classic & friend
   ante: 50,               // royale
   difficulty: 'standard', // classic & royale, see DIFFICULTY_CHOICES
+  rampWords: TOWER.defaultRampWords, // tower: words per decree, host-set 2-10
   timerMs: 0,             // 0 = none
   revealMs: 4000,         // interstitial between words (tests shrink it)
   countdownMs: COUNTDOWN_MS, // pre-word 3-2-1 (tests shrink it)

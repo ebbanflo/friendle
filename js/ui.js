@@ -178,6 +178,14 @@ export class UI {
     $('btn-resume').onclick = () => this.setPaused(false);
     $('btn-picker-cancel').onclick = () => this.closePicker();
     $('stake-range').addEventListener('input', (e) => { $('stake-out').textContent = e.target.value; });
+    // live readout on every drag tick; only push the real setting (and its
+    // lobby broadcast) once the host releases the slider
+    $('ramp-range').addEventListener('input', (e) => { $('ramp-out').textContent = e.target.value; });
+    $('ramp-range').addEventListener('change', (e) => {
+      if (!this.mirror || !this.mirror.isHost()) return;
+      this.a.setSettings({ rampWords: Number(e.target.value) });
+      sfx.key();
+    });
 
     document.addEventListener('keydown', (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -326,19 +334,24 @@ export class UI {
     }
     $('set-ante').classList.toggle('hidden', s.mode !== 'royale');
     $('set-words').classList.toggle('hidden', s.mode === 'royale' || s.mode === 'tower');
-    $('set-diff').classList.toggle('hidden', s.mode === 'friend'); // FRIEND words are human-made
+    $('set-diff').classList.toggle('hidden', s.mode === 'friend' || s.mode === 'tower'); // FRIEND is human-made; TOWER has its own DECREE knob
     $('words-one').classList.toggle('hidden', s.mode !== 'friend'); // 1-each is a FRIEND thing
     $('set-timer').classList.toggle('hidden', s.mode === 'tower'); // the tower has hunger instead
-    // TOWER's LEVEL means ramp speed - only easy/med/hard apply
-    for (const btn of document.querySelectorAll('[data-setting="difficulty"] .seg-btn')) {
-      const towerless = ['standard', 'ramp'].includes(btn.dataset.val);
-      btn.classList.toggle('hidden', s.mode === 'tower' && towerless);
+    $('set-ramp').classList.toggle('hidden', s.mode !== 'tower');
+    if (s.mode === 'tower') {
+      const rampRange = $('ramp-range');
+      rampRange.disabled = !m.isHost();
+      // don't clobber the value mid-drag on a live-typing host
+      if (document.activeElement !== rampRange) {
+        rampRange.value = s.rampWords;
+        $('ramp-out').textContent = s.rampWords;
+      }
     }
     $('mode-blurb').textContent = {
       classic: 'same word, everyone races — most points after all words wins',
       royale: 'endless words, ante into the pot, hit 0 = out. last standing wins',
       friend: `take turns setting secret words — ${s.words} each. stump people to score`,
-      tower: 'CO-OP: stack real words under the decree. misses cost lives. solo ok!',
+      tower: 'CO-OP: stack real words under the decree. misses cost lives. solo ok! (lower DECREE = easier)',
     }[s.mode] || '';
     const minP = s.mode === 'tower' ? 1 : 2;
     const enough = m.players.filter((p) => p.connected).length >= minP;

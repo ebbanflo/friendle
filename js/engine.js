@@ -307,14 +307,8 @@ export class Engine {
   }
 
   // ---------- TOWER (co-op, endless) ----------
-  towerDifficulty() {
-    const d = this.settings.difficulty;
-    return ['easy', 'medium', 'hard'].includes(d) ? d : 'medium';
-  }
-
   initTower() {
     if (this.over) return;
-    const diff = this.towerDifficulty();
     this.tower = {
       stage: 1,
       wordsInStage: 0,
@@ -324,8 +318,10 @@ export class Engine {
       used: new Set(),
       lives: Object.fromEntries(this.activePlayers().map((p) => [p.id, TOWER.lives])),
       revives: {},              // reviverPid -> {target, word, rows:[{word,colors}]}
-      rampWords: this.settings.rampWords ?? TOWER.rampWords[diff],
-      hungerMs: this.settings.hungerMs ?? TOWER.hungerMs[diff],
+      // host-set 2-10 in the lobby (UI-clamped, not server-enforced - tests
+      // intentionally pass values outside that range to freeze a stage).
+      rampWords: this.settings.rampWords ?? TOWER.defaultRampWords,
+      hungerMs: this.settings.hungerMs ?? TOWER.hungerMs,
       constraint: null,
     };
     this.tower.constraint = genConstraint(1, this.tower.used);

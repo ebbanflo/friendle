@@ -149,10 +149,27 @@ then piles on bans; every generated decree is verified to leave at least
 `minWordsPerDecree` unused dictionary words. Tower submissions are NOT
 pre-validated client-side - pressing enter on a bad word is how lives are
 lost, by design (only the revive wordle gets the friendly local dictionary
-check). `settings.rampWords` / `settings.hungerMs` are debug-only overrides
-used by tests. LEVEL in tower means ramp speed (easy 20 / medium 12 / hard 7
-words per stage); standard/ramp fall back to medium. Scoring is deliberately
-RPG-huge (`wordPoints`: base + letter values, x stage, x combo).
+check). Scoring is deliberately RPG-huge (`wordPoints`: base + letter
+values, x stage, x combo).
+
+**DECREE pacing is a direct host setting, not a difficulty label.**
+`settings.rampWords` (default `TOWER.defaultRampWords` = 5) is words-per-
+decree, host-adjustable 2-10 via a lobby `<input type="range">`
+(`#ramp-range`/`#ramp-out`, wired in `ui.js wireGameChrome()` - `input`
+updates the live readout only, `change` fires `setSettings` once the drag
+ends, to avoid flooding the lobby broadcast on every drag tick). It is
+**not** clamped server-side - the UI restricts normal hosts to 2-10, but
+tests intentionally pass values like `999` to freeze a stage or `2` to force
+rapid escalation, and `initTower()` accepts whatever `settings.rampWords`
+holds. Counterintuitively LOWER plays easier (confirmed by playtesting, not
+just theory): a small count cycles to a fresh, often-gentler constraint
+before the team's vocabulary for the current one is tapped out; a high count
+forces them to keep finding NEW distinct words under the SAME constraint
+until they run dry. `TOWER.hungerMs` is now a flat constant (not difficulty-
+keyed) - `settings.hungerMs` remains a separate debug-only override used by
+tests. `settings.difficulty` (the shared Classic/Royale enum) has no effect
+on TOWER at all; the lobby hides `#set-diff` and shows `#set-ramp` instead
+when `mode === 'tower'`.
 
 **Bonus hearts.** `engine.grantHearts(reason)` adds one life to every active
 player, capped at `TOWER.maxLives` (5) - including anyone currently at 0,
