@@ -307,9 +307,28 @@ words":
   survive only if Scrabble says they're real words (smith yes, patel no), and
   Knuth's list is evidence-only (it carries "legos"/"ioctl"-grade corpus
   noise).
-- Profanity/slurs are stripped from both lists; a SOFT_BAD tier (dual-use or
-  charged words: "lynch", "jihad", …) is excluded from answers but stays
-  guessable.
+- **Word-safety is three tiers, EXACT-MATCH ONLY** (`SLURS`/`CRUDE`/
+  `SOFT_BAD` in build-words.mjs) — never prefix/stem matching. An earlier
+  version blocked by 4-5 letter stem against LDNOOBW (a generic third-party
+  filter list), which silently ate ~130 ordinary words as GUESSES: "spice"/
+  "spicy" (stem "spic", shared with a slur), "grope"/"sucks"/"tushy"/"fecal"
+  (LDNOOBW's own over-broad literal entries), "butte"/"cocky"/"dicky"/
+  "booby"/"nudes" (innocent words sharing a prefix with an unrelated flagged
+  word) — and "whore" itself, an exact-listed word that was never a stem
+  victim but got caught because the SAME filter was wrongly applied to the
+  whole guess dictionary, not just the solution pool. `tests/words.spec.js`
+  is the regression test. Current policy: `SLURS` (small, hand-reviewed
+  ethnic/racial slurs — excluded from BOTH guesses and solutions, since being
+  wrong in the permissive direction here is a real harm) vs. `CRUDE` (real,
+  vulgar-but-mainstream dictionary words like "whore"/"bitch"/"pussy" — fully
+  valid GUESSES, matching what the actual official Wordle list allows, but
+  never auto-picked as the publicly-revealed solution) vs. `SOFT_BAD`
+  (dual-use words with an innocent primary meaning: "lynch", "jihad", … —
+  same guessable-not-a-solution treatment as CRUDE, kept as a separate tier
+  only for readability). A FRIEND-mode setter can still knowingly choose a
+  CRUDE word as their secret (they pick from the full guess dictionary
+  already) — that's a deliberate human choice, unlike an auto-pick, and
+  intentionally not restricted further.
 - Solutions ship **ordered commonest-first**; standard mode squares the
   random variate so everyday words dominate play while the deep tail keeps a
   marathon Royale from repeating (used words are tracked per session).

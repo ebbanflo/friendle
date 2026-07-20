@@ -49,29 +49,44 @@ const names = new Set([
   ...norm(read('surnames-all.txt')),    // worldwide surnames
 ].filter(five));
 
-// Profanity: LDNOOBW plus manual additions; block exact matches and any word
-// extending a 4+ letter bad stem (fuck->fucks, cunt->cunty, shit->shite).
-const EXTRA_BAD = ['asses', 'bitch', 'whore', 'penis', 'boner', 'semen', 'prick',
+// Word-safety policy, tiered and EXACT-MATCH ONLY (no prefix/stem matching -
+// an earlier version matched by 4-5 letter stem, e.g. "spic"->blocks
+// "spice"/"spicy"/"spica", "butt"->blocks "butte"/"butty", "bust"->blocks
+// "busty"/"bustle"'s cousins - it silently ate ~100 ordinary words, "whore"
+// among the casualties despite being an EXACT-list entry, not a stem victim,
+// because the guess dictionary applied this same over-broad filter to the
+// full valid-guess list too. Lesson: exact match is precise and auditable;
+// stem matching against a generic third-party list is not. See git history
+// for the audit that produced these three lists.
+//
+// SLURS: excluded from BOTH the guess dictionary and solutions. Being wrong
+// in the "too permissive" direction here is a real harm, unlike ordinary
+// profanity, so this stays a small, deliberately hand-reviewed list rather
+// than anything derived from a generic word-filter corpus.
+const SLURS = new Set(['spick', 'spics', 'spiks', 'dagos', 'dagoe', 'sambo', 'zambo',
+  'zambos', 'boong', 'gippo', 'gyppo', 'gyppy', 'lezzy', 'lezza', 'micks', 'honky',
+  'cholo', 'munts', 'kafir', 'cooly', 'squaw', 'injun', 'kraut', 'hymie', 'wetba',
+  'darki', 'darky', 'boche', 'polak', 'jiggs', 'niggs', 'coons', 'nigga', 'negro',
+  'pikey', 'fagot', 'kikes', 'gooks', 'chink', 'abbos']);
+// CRUDE: real dictionary words - fully valid GUESSES (this is what the
+// actual official Wordle valid-guess list allows; a word game shouldn't
+// second-guess a player's correct answer just because it's vulgar) but
+// never the auto-picked, publicly-revealed SOLUTION.
+const CRUDE = new Set(['asses', 'bitch', 'whore', 'penis', 'boner', 'semen', 'prick',
   'pussy', 'twats', 'cunts', 'dicks', 'cocks', 'titty', 'boobs', 'queef', 'shits',
   'turds', 'dildo', 'gonad', 'pubes', 'pubic', 'rapes', 'raped', 'raper', 'nazis',
-  'negro', 'spick', 'spics', 'homos', 'dykes', 'fagot', 'kikes', 'gooks', 'chink',
-  'wanks', 'wanky', 'spunk', 'horny', 'nonce', 'pedos', 'paedo', 'porno', 'porns',
-  'sperm', 'vulva', 'labia', 'anals', 'enema', 'feces', 'urine', 'bimbo', 'hussy',
-  'darky', 'gyppo', 'abbos', 'coons', 'jizzy', 'jizzs',
-  // slurs (incl. plurals/variants) found by manual scan of the candidate pool
-  'spiks', 'dagos', 'sambo', 'zambo', 'boong', 'gippo', 'lezzy', 'lezza', 'micks',
-  'honky', 'cholo', 'munts', 'kafir', 'cooly', 'squaw', 'injun', 'gyppy', 'kraut',
-  'hymie', 'shiks', 'wetba', 'darki', 'dagoe', 'zambos', 'boche', 'polak',
-  'yaboo', 'abies', 'jiggs', 'niggs', 'goyim', 'goyer'];
-// Excluded from solutions only (never the revealed answer) but still typeable:
-// dual-use words with an innocent primary meaning, plus NYT-style removals.
+  'homos', 'dykes', 'wanks', 'wanky', 'spunk', 'horny', 'nonce', 'pedos', 'paedo',
+  'porno', 'porns', 'sperm', 'vulva', 'labia', 'anals', 'feces', 'urine', 'bimbo',
+  'hussy', 'jizzy', 'jizzs', 'busty', 'felch', 'panty', 'kinky']);
+// SOFT_BAD: dual-use words with an innocent primary meaning we'd still
+// rather not have the game randomly announce as "today's word".
 const SOFT_BAD = new Set(['spook', 'dinge', 'swart', 'moola', 'wench',
-  'lynch', 'slave', 'harem', 'biddy', 'hoors', 'negus', 'fatso', 'dummy',
+  'lynch', 'slave', 'harem', 'biddy', 'hoors', 'negus',
   'jihad', 'aryan', 'allah', 'nazes', 'fatwa', 'shoah']);
-const badAll = norm(read('badwords.txt')).concat(EXTRA_BAD).filter((w) => /^[a-z]{3,5}$/.test(w));
-const badExact = new Set(badAll.filter(five));
-const badStems = [...new Set(badAll.filter((w) => w.length === 4 || w.length === 5))];
-const isBad = (w) => badExact.has(w) || badStems.some((b) => w.startsWith(b));
+// Guesses are filtered by SLURS only - a real word game doesn't second-guess
+// a technically-correct, merely-vulgar guess. Candidates (solutions) also
+// exclude CRUDE and SOFT_BAD; see their admission filter below.
+const isBad = (w) => SLURS.has(w);
 
 // Subtitle-corpus counts (conversational English).
 const subCount = new Map();
@@ -111,9 +126,12 @@ const universe = new Set([
 ]);
 // Admission requires Wordle- or Scrabble-legality. sgb stays an evidence
 // boost only - Knuth's list carries corpus informalities ("thats", "legos").
+// Solutions get the full three-tier filter (SLURS + CRUDE + SOFT_BAD) since
+// this is the pool that gets randomly picked AND publicly revealed; GUESSES
+// (below) only excludes SLURS.
 const candidates = [...universe].filter(
   (w) => (valid.has(w) || scrab.has(w))
-    && !isBad(w) && !SOFT_BAD.has(w) && !nameBlocked(w)
+    && !isBad(w) && !CRUDE.has(w) && !SOFT_BAD.has(w) && !nameBlocked(w)
 );
 
 // Evidence score: independent attestations stack, so real words rise and
@@ -164,8 +182,10 @@ const hard = scored
   .map((x) => x.w);
 
 // Guess dictionary: the standard Wordle valid list plus every solution.
-// Profanity is stripped here too: FRIEND-mode setters pick their secret from
-// this dictionary and it gets revealed to the whole room at the end.
+// Only SLURS are stripped - crude-but-real words (the CRUDE tier) stay
+// guessable, matching the actual official Wordle valid-guess list. A
+// FRIEND-mode setter can still choose any guessable word as their secret
+// (including CRUDE ones - a knowing human choice, unlike an auto-pick).
 const guesses = [...new Set([...valid, ...solutions])].filter((w) => !isBad(w)).sort();
 
 mkdirSync(outDir, { recursive: true });
