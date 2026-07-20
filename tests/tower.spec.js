@@ -373,4 +373,36 @@ test.describe('tower mode', () => {
     await climb(host, words[1]);
     await host.waitForFunction(() => window.__friendle.state().tower.stage === 2, null, { polling: 100 });
   });
+
+  test('the visible stack caps at 10 floors and the keyboard never shifts', async ({ context }) => {
+    test.setTimeout(60000);
+    const host = await openPage(context);
+    await hostGame(host, 'ANCHOR', {
+      ...FAST, mode: 'tower', rampWords: 999, hungerMs: 600000,
+    });
+    await host.click('#btn-start');
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+
+    const keyboardY = () => host.locator('#keyboard').boundingBox().then((b) => b.y);
+    const yEmpty = await keyboardY();
+
+    const words = GUESSES.filter((w) => /^[a-z]{5}$/.test(w)).slice(0, 20);
+    for (let i = 0; i < 6; i++) await climb(host, words[i]);
+    expect(await keyboardY()).toBe(yEmpty); // fixed footprint from the first word on
+
+    for (let i = 6; i < 14; i++) await climb(host, words[i]);
+    expect(await keyboardY()).toBe(yEmpty); // still identical well past the cap
+
+    // exactly 10 rows on screen, and they're the 10 MOST RECENT (5..14, not 1..10)
+    const rows = host.locator('.tower-row');
+    await expect(rows).toHaveCount(10);
+    const cellsOf = async (loc) => (await loc.locator('.tower-cell').allTextContents()).join('').toLowerCase();
+    expect(await cellsOf(rows.first())).toBe(words[13]); // newest on top
+    expect(await cellsOf(rows.last())).toBe(words[4]);   // oldest still visible
+    // word 0 (the very first floor placed) has scrolled off the visible window
+    for (let i = 0; i < 10; i++) expect(await cellsOf(rows.nth(i))).not.toBe(words[0]);
+    // but it's still real height/score, just not rendered
+    expect((await towerState(host)).height).toBe(14);
+  });
 });

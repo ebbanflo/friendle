@@ -488,7 +488,14 @@ input[type="text"], #inp-name, #inp-code {
   font-size: .72rem; font-weight: 800; letter-spacing: .06em; color: #8fe0ff;
   text-shadow: 0 0 8px rgba(80, 200, 255, .6); margin-top: .1rem;
 }
-.tower-stack { display: flex; flex-direction: column-reverse; gap: .22rem; min-height: 8rem; justify-content: flex-start; }
+/* Fixed to hold exactly TOWER_VISIBLE_ROWS (10) rows: 10 * 1.7rem tiles +
+   9 * .22rem gaps. A fixed height (not min-height) is the point - the
+   footprint never grows as the tower fills, so nothing below it (the
+   keyboard) ever shifts. Keep in sync with TOWER_VISIBLE_ROWS in ui.js. */
+.tower-stack {
+  display: flex; flex-direction: column-reverse; gap: .22rem;
+  height: 19rem; overflow: hidden; justify-content: flex-start;
+}
 .tower-stack.bonus-pulse { animation: cascade 1s ease; }
 .tower-row {
   display: flex; gap: .2rem; align-items: center;

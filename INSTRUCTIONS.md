@@ -171,6 +171,17 @@ tests. `settings.difficulty` (the shared Classic/Royale enum) has no effect
 on TOWER at all; the lobby hides `#set-diff` and shows `#set-ramp` instead
 when `mode === 'tower'`.
 
+**Visible stack is a fixed-size window, not the full tower.** The engine
+keeps every floor (`tower.rows`, capped at 60 for memory, `.slice(-40)` on
+resync) - height/scoring are never affected. `ui.js renderTowerStack()` only
+renders the newest `TOWER_VISIBLE_ROWS` (10), and `.tower-stack` in
+style.css is a fixed `height` (not `min-height`) sized for exactly that many
+rows. Both together are what make the keyboard immovable: fixed DOM height +
+fixed row count means the stack's footprint never changes from the first
+floor onward, instead of growing until it hits a cap. If you ever change
+TOWER_VISIBLE_ROWS, update the CSS height in lockstep (10 rows = 10 *
+1.7rem tiles + 9 * .22rem gaps = 19rem) or the keyboard will drift again.
+
 **Bonus hearts.** `engine.grantHearts(reason)` adds one life to every active
 player, capped at `TOWER.maxLives` (5) - including anyone currently at 0,
 which is a deliberate "team saved them" revive-via-milestone. Two triggers,

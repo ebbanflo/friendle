@@ -9,6 +9,10 @@ import { sfx, soundEnabled, setSound } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', '⏎zxcvbnm⌫'];
+// TOWER: how many floors stay on screen at once. Must match the fixed
+// height baked into .tower-stack in style.css, or the stack's footprint
+// (and everything below it, including the keyboard) will shift as it fills.
+const TOWER_VISIBLE_ROWS = 10;
 
 export class UI {
   // actions: {host(), join(code), start(), setSettings(patch), playAgain(), quitToMenu()}
@@ -880,8 +884,10 @@ export class UI {
     const t = m.tower;
     const stack = $('tower-stack');
     stack.replaceChildren();
-    // newest on top - the tower grows upward
-    for (const row of t.rows.slice(-8).reverse()) {
+    // Fixed window (see TOWER_VISIBLE_ROWS / .tower-stack height in CSS): the
+    // oldest visible floor drops off as a new one lands, so the stack's
+    // footprint never grows and the keyboard below it never shifts.
+    for (const row of t.rows.slice(-TOWER_VISIBLE_ROWS).reverse()) {
       const p = m.player(row.pid);
       const line = el('div', { class: 'tower-row', style: { '--sig': p ? p.color : '#888' } });
       for (const ch of row.word) line.append(el('span', { class: 'tower-cell', text: ch.toUpperCase() }));
