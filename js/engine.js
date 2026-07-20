@@ -10,10 +10,11 @@
 import {
   MAX_PLAYERS, MIN_PLAYERS, MAX_ROWS, GRACE_MS, COUNTDOWN_MS, TIMER_SLACK_MS,
   SCORING, ROYALE, SHOP, FREEZE_MS, DEFAULT_SETTINGS, PLAYER_COLORS, LEAVE_GRACE_MS,
-  REACTIONS, REACT_COOLDOWN_MS,
+  REACTIONS, REACT_COOLDOWN_MS, TOWER,
 } from './config.js';
 import { EV, IN } from './protocol.js';
 import { pickWord, scoreGuess, isValidGuess } from './words.js';
+import { matchesConstraint, genConstraint, wordPoints } from './tower.js';
 import { obf, deobf, now } from './util.js';
 
 const SET_TIMEOUT_MS = 75000; // FRIEND: setter stalls -> rotate onward
@@ -120,8 +121,10 @@ export class Engine {
     });
   }
 
+  minPlayers() { return this.settings.mode === 'tower' ? 1 : MIN_PLAYERS; }
+
   start() {
-    if (this.started || this.players.filter((p) => p.connected).length < MIN_PLAYERS) return;
+    if (this.started || this.players.filter((p) => p.connected).length < this.minPlayers()) return;
     this.players = this.players.filter((p) => p.connected);
     this.players.forEach((p, i) => {
       p.color = PLAYER_COLORS[i % PLAYER_COLORS.length];
@@ -138,7 +141,8 @@ export class Engine {
       settings: this.settings,
       players: this.players.map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score })),
     });
-    this.timers.next = setTimeout(() => this.nextWord(), 1200);
+    if (this.settings.mode === 'tower') this.timers.next = setTimeout(() => this.initTower(), 1200);
+    else this.timers.next = setTimeout(() => this.nextWord(), 1200);
   }
 
   // ---------- rounds ----------
@@ -302,8 +306,178 @@ export class Engine {
     this.timers.setter = setTimeout(() => this.skipSetter('slow'), SET_TIMEOUT_MS);
   }
 
+  // ---------- TOWER (co-op, endless) ----------
+  towerDifficulty() {
+    const d = this.settings.difficulty;
+    return ['easy', 'medium', 'hard'].includes(d) ? d : 'medium';
+  }
+
+  initTower() {
+    if (this.over) return;
+    const diff = this.towerDifficulty();
+    this.tower = {
+      stage: 1,
+      wordsInStage: 0,
+      height: 0,
+      combo: 0,
+      rows: [],                 // {pid, word, points}
+      used: new Set(),
+      lives: Object.fromEntries(this.activePlayers().map((p) => [p.id, TOWER.lives])),
+      revives: {},              // reviverPid -> {target, word, rows:[{word,colors}]}
+      rampWords: this.settings.rampWords ?? TOWER.rampWords[diff],
+      hungerMs: this.settings.hungerMs ?? TOWER.hungerMs[diff],
+      constraint: null,
+    };
+    this.tower.constraint = genConstraint(1, this.tower.used);
+    this.broadcastTower();
+    this.armHunger();
+  }
+
+  broadcastTower() {
+    const t = this.tower;
+    this.net.emit(EV.TOWER, {
+      stage: t.stage, constraint: t.constraint, height: t.height,
+      hungerMs: t.hungerMs, lives: { ...t.lives }, scores: this.scoreMap(),
+      combo: t.combo,
+    });
+  }
+
+  armHunger() {
+    clearTimeout(this.timers.hunger);
+    if (!this.tower || this.over) return;
+    this.timers.hunger = setTimeout(() => this.hungerStrike(), this.tower.hungerMs);
+  }
+
+  // The tower demands words: silence bleeds every living player.
+  hungerStrike() {
+    const t = this.tower;
+    if (!t || this.over) return;
+    const downed = [];
+    for (const p of this.activePlayers()) {
+      if (t.lives[p.id] > 0) {
+        t.lives[p.id] -= 1;
+        if (t.lives[p.id] === 0) downed.push(p.id);
+      }
+    }
+    t.combo = 0;
+    this.net.emit(EV.TOWER_HUNGER, { lives: { ...t.lives }, downed });
+    if (this.everyoneDowned()) this.endTower();
+    else this.armHunger();
+  }
+
+  everyoneDowned() {
+    return this.activePlayers().every((p) => (this.tower.lives[p.id] ?? 0) <= 0);
+  }
+
+  onTowerGuess(d, from) {
+    const t = this.tower;
+    if (!t || this.over) return;
+    const p = this.player(from);
+    if (!p || !p.connected) return;
+    const word = this.unwrapWord(d.x);
+
+    // A player mid-revive is playing their rescue wordle, not the tower.
+    if (t.revives[from]) return this.onReviveGuess(word, from);
+
+    if ((t.lives[from] ?? 0) <= 0) return; // downed players watch
+
+    if (!isValidGuess(word)) return this.towerMiss(from, word, 'not a word');
+    if (t.used.has(word)) return this.towerMiss(from, word, 'already in the tower');
+    if (!matchesConstraint(word, t.constraint)) return this.towerMiss(from, word, 'breaks the decree');
+
+    // accepted: the tower grows
+    t.used.add(word);
+    t.height += 1;
+    t.combo += 1;
+    t.wordsInStage += 1;
+    const points = wordPoints(word, t.stage, t.combo);
+    p.score += points;
+    t.rows.push({ pid: from, word, points });
+    if (t.rows.length > 60) t.rows.shift();
+    this.net.emit(EV.TOWER_WORD, {
+      pid: from, word, points, height: t.height, combo: t.combo, stage: t.stage,
+    });
+    this.armHunger();
+
+    if (t.wordsInStage >= t.rampWords) {
+      t.stage += 1;
+      t.wordsInStage = 0;
+      t.constraint = genConstraint(t.stage, t.used);
+      this.broadcastTower();
+    }
+  }
+
+  towerMiss(from, word, reason) {
+    const t = this.tower;
+    t.lives[from] = Math.max(0, (t.lives[from] ?? 0) - 1);
+    t.combo = 0;
+    this.net.emit(EV.TOWER_MISS, {
+      pid: from, word, reason, lives: { ...t.lives }, combo: 0,
+    });
+    if (this.everyoneDowned()) this.endTower();
+  }
+
+  onReviveBuy(d, from, fail) {
+    const t = this.tower;
+    const p = this.player(from);
+    if (!t) return fail('No tower to climb');
+    if ((t.lives[from] ?? 0) <= 0) return fail('You are down yourself');
+    if (t.revives[from]) return fail('Already reviving');
+    const target = this.player(d.target);
+    if (!target || (t.lives[target.id] ?? 0) > 0 || !target.connected) return fail('Pick a fallen teammate');
+    if (p.score < SHOP.revive.price) return fail(`Need ${SHOP.revive.price} points`);
+    p.score -= SHOP.revive.price;
+    const word = pickWord(this.usedWords, 'easy'); // rescues are merciful
+    this.usedWords.add(word);
+    t.revives[from] = { target: target.id, word, rows: [] };
+    this.net.emit(EV.SCORES, { scores: this.scoreMap(), buyer: from, item: 'revive' });
+    this.net.emit(EV.TOWER_REVIVE, { phase: 'start', reviver: from, target: target.id });
+  }
+
+  onReviveGuess(word, from) {
+    const t = this.tower;
+    const rev = t.revives[from];
+    if (!rev) return;
+    if (!isValidGuess(word)) {
+      this.net.emit(EV.BAD_GUESS, { to: from, no: -1, reason: 'invalid' });
+      return;
+    }
+    const colors = scoreGuess(word, rev.word);
+    const solved = word === rev.word;
+    rev.rows.push({ word, colors });
+    // co-op spectacle: everyone watches the rescue, letters included
+    this.net.emit(EV.TOWER_REVIVE, {
+      phase: 'row', reviver: from, target: rev.target,
+      row: rev.rows.length - 1, word, colors,
+    });
+    if (solved || rev.rows.length >= MAX_ROWS) {
+      delete t.revives[from];
+      if (solved) t.lives[rev.target] = TOWER.reviveLives;
+      this.net.emit(EV.TOWER_REVIVE, {
+        phase: 'end', reviver: from, target: rev.target, ok: solved,
+        lives: { ...t.lives }, secret: rev.word,
+      });
+    }
+  }
+
+  endTower() {
+    const t = this.tower;
+    if (!t || this.over) return;
+    this.over = true;
+    clearTimeout(this.timers.hunger);
+    const standings = [...this.players].sort((a, b) => b.score - a.score);
+    this.net.emit(EV.GAME_OVER, {
+      reason: 'the tower fell',
+      winner: standings[0] ? standings[0].id : null,
+      height: t.height,
+      stage: t.stage,
+      standings: standings.map((p) => ({ id: p.id, name: p.name, color: p.color, score: p.score, alive: p.alive })),
+    });
+  }
+
   // ---------- guessing ----------
   onGuess(d, from) {
+    if (this.settings.mode === 'tower') return this.onTowerGuess(d, from);
     const r = this.round;
     if (!r || r.phase !== 'play' || r.suspended || this.over) return;
     const p = this.player(from);
@@ -509,6 +683,7 @@ export class Engine {
     if (!this.over) return;
     this.started = false;
     this.over = false;
+    this.tower = null;
     this.usedWords = new Set(this.usedWords); // used words persist across a session
     for (const p of this.players) { p.score = 0; p.alive = true; p.spectator = false; }
     this.players = this.players.filter((p) => p.connected);
@@ -524,6 +699,11 @@ export class Engine {
 
     if (!item || !p) return;
     if (this.settings.mode === 'friend') return fail('No shop in FRIEND mode');
+    if (this.settings.mode === 'tower') {
+      if (d.item !== 'revive') return fail('The tower sells only revival');
+      return this.onReviveBuy(d, from, fail);
+    }
+    if (d.item === 'revive') return fail('Revives are TOWER-only');
     if (!r || r.phase !== 'play' || r.suspended || this.over) return fail('Not now');
     if (!p.alive || p.spectator) return fail('Spectators cannot buy');
     if (r.done[from] && d.item !== 'duel') return fail('You already finished this word');
@@ -747,9 +927,17 @@ export class Engine {
       }
     }
 
+    // Tower: a leaver's revive fizzles (points stay spent), and the run ends
+    // if only downed players remain.
+    if (this.settings.mode === 'tower' && this.tower) {
+      if (this.tower.revives[pid]) delete this.tower.revives[pid];
+      if (this.activePlayers().length === 0 || this.everyoneDowned()) { this.endTower(); return; }
+    }
+
     const remaining = this.players.filter((q) => q.connected);
-    if (this.started && !this.over && remaining.length < MIN_PLAYERS) {
-      this.gameOver('everyone else left');
+    if (this.started && !this.over && remaining.length < this.minPlayers()) {
+      if (this.settings.mode === 'tower') this.endTower();
+      else this.gameOver('everyone else left');
     }
   }
 
@@ -788,12 +976,22 @@ export class Engine {
         a: this.duel.a, b: this.duel.b, stake: this.duel.stake, turn: this.duel.turn,
         rows: this.duel.rows.map((x) => ({ pid: x.pid, word: x.word, colors: x.colors })),
       } : null,
+      tower: (this.settings.mode === 'tower' && this.tower) ? {
+        stage: this.tower.stage, constraint: this.tower.constraint,
+        height: this.tower.height, combo: this.tower.combo,
+        hungerMs: this.tower.hungerMs, lives: { ...this.tower.lives },
+        rows: this.tower.rows.slice(-40),
+        reviving: Object.entries(this.tower.revives).map(([rev, s]) => ({
+          reviver: rev, target: s.target,
+          rows: s.rows.map((x) => ({ word: x.word, colors: x.colors })),
+        })),
+      } : null,
     };
     this.net.emit(EV.RESYNC, { to: pid, snapshot });
   }
 
   clearRoundTimers() {
-    for (const k of ['deadline', 'grace', 'setter', 'next']) {
+    for (const k of ['deadline', 'grace', 'setter', 'next', 'hunger']) {
       clearTimeout(this.timers[k]);
       this.timers[k] = null;
     }

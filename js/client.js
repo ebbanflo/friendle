@@ -36,6 +36,8 @@ export class Mirror {
     this.oppWords = {};     // FRIEND setter only: pid -> {row: word}
     this.reactions = [];    // {from, target, emoji, at}, capped
     this.duel = null;
+    this.tower = null;      // TOWER mode mirror: see onTower()
+    this.pendingTower = 0;  // timestamp of an unanswered tower submit
     this.reveal = null;     // last REVEAL payload (for the interstitial)
     this.gameover = null;
     this.toast = null;
@@ -58,6 +60,11 @@ export class Mirror {
       [EV.HINT]: (d) => { if (d.to === selfId) { this.hints[d.col] = d.letter; this.fire('hint', d); } },
       [EV.PEEK]: (d) => { if (d.to === selfId) { this.peeks.push(d); this.fire('peek', d); } },
       [EV.SMUDGE]: (d) => this.onSmudge(d),
+      [EV.TOWER]: (d) => this.onTower(d),
+      [EV.TOWER_WORD]: (d) => this.onTowerWord(d),
+      [EV.TOWER_MISS]: (d) => this.onTowerMiss(d),
+      [EV.TOWER_HUNGER]: (d) => this.onTowerHunger(d),
+      [EV.TOWER_REVIVE]: (d) => this.onTowerRevive(d),
       [EV.DUEL_START]: (d) => this.onDuelStart(d),
       [EV.DUEL_ROW]: (d) => this.onDuelRow(d),
       [EV.DUEL_END]: (d) => this.onDuelEnd(d),
@@ -98,7 +105,10 @@ export class Mirror {
     this.players = d.players;
     this.settings = d.settings;
     this.started = d.started;
-    if (!d.started) { this.over = false; this.gameover = null; this.round = null; this.reveal = null; }
+    if (!d.started) {
+      this.over = false; this.gameover = null; this.round = null;
+      this.reveal = null; this.tower = null; this.duel = null;
+    }
     this.fire('lobby', d);
   }
 
@@ -112,6 +122,8 @@ export class Mirror {
     this.over = false;
     this.gameover = null;
     this.reveal = null;
+    this.tower = null;
+    this.pendingTower = 0;
     this.fire('start', d);
   }
 
@@ -241,6 +253,98 @@ export class Mirror {
     this.fire('smudge', d);
   }
 
+  // ---------- TOWER ----------
+  onTower(d) {
+    const t = this.tower || (this.tower = { rows: [], revives: {} });
+    t.stage = d.stage;
+    t.constraint = d.constraint;
+    t.height = d.height;
+    t.combo = d.combo;
+    t.hungerMs = d.hungerMs;
+    t.lives = d.lives;
+    t.hungerAt = now() + d.hungerMs;
+    this.applyScores(d.scores);
+    this.fire('tower', d);
+  }
+
+  onTowerWord(d) {
+    const t = this.tower;
+    if (!t) return;
+    t.rows.push({ pid: d.pid, word: d.word, points: d.points });
+    if (t.rows.length > 60) t.rows.shift();
+    t.height = d.height;
+    t.combo = d.combo;
+    t.stage = d.stage;
+    t.hungerAt = now() + t.hungerMs;
+    const p = this.player(d.pid);
+    if (p) p.score += d.points; // lean protocol: deltas, not snapshots
+    if (d.pid === this.selfId) this.pendingTower = 0;
+    this.fire('towerword', d);
+  }
+
+  onTowerMiss(d) {
+    const t = this.tower;
+    if (!t) return;
+    t.lives = d.lives;
+    t.combo = 0;
+    if (d.pid === this.selfId) {
+      this.pendingTower = 0;
+      this.showToast(`\u{1F494} "${d.word.toUpperCase()}" — ${d.reason}`);
+    }
+    this.fire('towermiss', d);
+  }
+
+  onTowerHunger(d) {
+    const t = this.tower;
+    if (!t) return;
+    t.lives = d.lives;
+    t.combo = 0;
+    t.hungerAt = now() + t.hungerMs;
+    this.showToast('\u{1F480} THE TOWER HUNGERS — everyone bleeds!');
+    this.fire('towerhunger', d);
+  }
+
+  onTowerRevive(d) {
+    const t = this.tower;
+    if (!t) return;
+    if (d.phase === 'start') {
+      t.revives[d.reviver] = { target: d.target, rows: [] };
+      if (d.reviver === this.selfId) { this.input = ''; this.pendingTower = 0; }
+    } else if (d.phase === 'row') {
+      const rev = t.revives[d.reviver];
+      if (rev) rev.rows[d.row] = { word: d.word, colors: d.colors };
+      if (d.reviver === this.selfId) { this.input = ''; this.pendingTower = 0; }
+    } else if (d.phase === 'end') {
+      delete t.revives[d.reviver];
+      if (d.lives) t.lives = d.lives;
+      if (d.reviver === this.selfId) this.pendingTower = 0;
+    }
+    this.fire('towerrev', d);
+  }
+
+  myRevive() {
+    return (this.tower && this.tower.revives[this.selfId]) || null;
+  }
+
+  myTowerLives() {
+    return this.tower ? (this.tower.lives[this.selfId] ?? 0) : 0;
+  }
+
+  submitTower() {
+    const word = this.input;
+    if (word.length !== WORD_LEN) { this.fire('shake', {}); return false; }
+    if (this.myRevive()) {
+      // the rescue wordle is classic rules - typos are free here
+      if (!isValidGuess(word)) { this.showToast('Not in dictionary'); this.fire('shake', {}); return false; }
+    }
+    // tower words are NOT pre-checked: the host judges, misses cost a life
+    this.pendingTower = now();
+    this.input = '';
+    this.net.emit(IN.GUESS, { x: obf(word, this.code) });
+    this.fire('submit', { tower: true, word });
+    return true;
+  }
+
   onDuelStart(d) {
     this.duel = { a: d.a, b: d.b, stake: d.stake, rows: [], turn: d.a, over: false, result: null };
     if (this.round) this.round.suspended = true;
@@ -328,6 +432,18 @@ export class Mirror {
     if (s.duel) {
       this.duel = { a: s.duel.a, b: s.duel.b, stake: s.duel.stake, turn: s.duel.turn, over: false, result: null, rows: s.duel.rows.map((x) => ({ ...x })) };
     }
+    if (s.tower) {
+      this.tower = {
+        stage: s.tower.stage, constraint: s.tower.constraint,
+        height: s.tower.height, combo: s.tower.combo,
+        hungerMs: s.tower.hungerMs, lives: { ...s.tower.lives },
+        hungerAt: now() + s.tower.hungerMs,
+        rows: s.tower.rows.map((r) => ({ ...r })),
+        revives: Object.fromEntries((s.tower.reviving || []).map((r) => [
+          r.reviver, { target: r.target, rows: r.rows.map((x) => ({ ...x })) },
+        ])),
+      };
+    }
     this.fire('resync', s);
   }
 
@@ -353,6 +469,12 @@ export class Mirror {
 
   inputLocked() {
     if (this.duel && !this.duel.over) return this.duel.turn !== this.selfId;
+    if (this.settings?.mode === 'tower') {
+      if (!this.started || this.over || !this.tower) return true;
+      if (this.myRevive()) return false;          // typing the rescue wordle
+      if (this.myTowerLives() <= 0) return true;  // downed players watch
+      return this.pendingTower > 0 && now() - this.pendingTower < 1500;
+    }
     if (!this.round) return true;
     if (this.round.phase === 'set') return !this.amSetter() || this.setterBusy;
     if (this.round.suspended || this.round.timeUp) return true;
@@ -381,6 +503,7 @@ export class Mirror {
   enter() {
     if (this.inputLocked()) return false;
     if (this.duel && !this.duel.over) return this.submitDuelGuess();
+    if (this.settings?.mode === 'tower') return this.submitTower();
     if (this.round.phase === 'set') return this.submitSecret();
     return this.submitGuess();
   }

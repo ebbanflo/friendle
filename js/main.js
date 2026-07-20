@@ -152,11 +152,19 @@ function installDebug() {
     duelSecret: () => (S.engine && S.engine.duel ? S.engine.duel.word : null),
     setScore: (pid, n) => S.engine && S.engine._debugSetScore(pid, n),
     setSettings: (patch) => S.engine && S.engine.setSettings(patch),
+    reviveSecret: (pid) => (S.engine && S.engine.tower && S.engine.tower.revives[pid]
+      ? S.engine.tower.revives[pid].word : null),
     engineState: () => S.engine && {
       started: S.engine.started,
       over: S.engine.over,
       pot: S.engine.pot,
       roundNo: S.engine.roundNo,
+      tower: S.engine.tower && {
+        stage: S.engine.tower.stage, height: S.engine.tower.height,
+        combo: S.engine.tower.combo, constraint: S.engine.tower.constraint,
+        lives: { ...S.engine.tower.lives }, used: S.engine.tower.used.size,
+        rampWords: S.engine.tower.rampWords, hungerMs: S.engine.tower.hungerMs,
+      },
       round: S.engine.round && {
         no: S.engine.round.no, phase: S.engine.round.phase,
         winner: S.engine.round.winner, setterId: S.engine.round.setterId,
@@ -189,6 +197,15 @@ function installDebug() {
         a: S.mirror.duel.a, b: S.mirror.duel.b, stake: S.mirror.duel.stake,
         turn: S.mirror.duel.turn, over: S.mirror.duel.over,
         rows: S.mirror.duel.rows.map((r) => ({ ...r })),
+      },
+      tower: S.mirror.tower && {
+        stage: S.mirror.tower.stage, height: S.mirror.tower.height,
+        combo: S.mirror.tower.combo, constraint: S.mirror.tower.constraint,
+        lives: { ...S.mirror.tower.lives },
+        rows: S.mirror.tower.rows.map((r) => ({ ...r })),
+        revives: Object.fromEntries(Object.entries(S.mirror.tower.revives).map(([k, v]) => [
+          k, { target: v.target, rows: v.rows.map((x) => ({ ...x })) },
+        ])),
       },
       reveal: S.mirror.reveal && { ...S.mirror.reveal },
       lastReveal: S.mirror.lastReveal && { ...S.mirror.lastReveal },

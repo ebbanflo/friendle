@@ -51,6 +51,25 @@ guesser's grid **with the actual letters**, live, plus an emoji heckle bar
 stragglers flail in full detail. Still-competing guessers only ever see each
 other's colors. No power-ups here — it's pure.
 
+### TOWER 🗼
+Barely Wordle at all — and gloriously so. **Co-op, 1–4 players** (solo climbs
+welcome), endless. The team races to stack real 5-letter words into a tower,
+but every word must obey the **DECREE** at the top of the screen — and the
+decree escalates: use this letter → use two → a letter in a specific slot →
+two slotted letters → forbidden letters → **NO VOWELS**, and it keeps
+twisting from there. The LEVEL setting controls the climb speed (easy ≈ every
+20 words, medium 12, hard 7).
+
+Everyone has **3 lives**. A submission that isn't a real word, repeats the
+tower, or breaks the decree costs one — and so does silence: leave the
+hunger bar to empty and *everyone* bleeds. Lose them all and you're down,
+until a teammate spends points on ✨ **Revive** — a classic solo Wordle where
+solving brings you back with 2 lives. When the whole team is down, the tower
+falls; your height is the trophy.
+
+Scoring is full RPG: huge glowing numbers, stage multipliers, team combos,
+and +damage popping off every word. Fill the screen.
+
 ## The power-up shop (Classic & Royale)
 
 Buy mid-word with your points:

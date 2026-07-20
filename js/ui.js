@@ -2,7 +2,8 @@
 // through it. Persistent tile/key nodes are mutated in place so CSS animations
 // survive updates.
 
-import { WORD_LEN, MAX_ROWS, SHOP, DEFAULT_SETTINGS, REACTIONS } from './config.js';
+import { WORD_LEN, MAX_ROWS, SHOP, DEFAULT_SETTINGS, REACTIONS, TOWER } from './config.js';
+import { describeConstraint } from './tower.js';
 import { el, fmtMs, now } from './util.js';
 import { sfx, soundEnabled, setSound } from './audio.js';
 
@@ -68,6 +69,26 @@ export class UI {
       }
       db.append(rowEl);
       this.duelTiles.push(row);
+    }
+    // tower input row + revive board
+    this.towerTiles = [];
+    for (let c = 0; c < WORD_LEN; c++) {
+      const t = el('div', { class: 'tile tower-tile', 'data-testid': `twr-in-${c}` });
+      $('tower-input').append(t);
+      this.towerTiles.push(t);
+    }
+    this.reviveTiles = [];
+    const rb = $('revive-board');
+    for (let r = 0; r < MAX_ROWS; r++) {
+      const rowEl = el('div', { class: 'brow' });
+      const row = [];
+      for (let c = 0; c < WORD_LEN; c++) {
+        const t = el('div', { class: 'tile mini-duel', 'data-testid': `rev-${r}-${c}` });
+        rowEl.append(t);
+        row.push(t);
+      }
+      rb.append(rowEl);
+      this.reviveTiles.push(row);
     }
     // keyboard
     this.keys = {};
@@ -222,19 +243,33 @@ export class UI {
         break;
       case 'start':
         this.show('scr-game');
+        $('tower-panel').classList.add('hidden');
+        $('duel-panel').classList.add('hidden');
+        $('setter-panel').classList.add('hidden');
+        $('game-main').classList.remove('hidden');
         this.buildOpponents();
         this.renderStrip();
+        this.renderShop();
         sfx.join();
         break;
       case 'word': this.onWord(d); break;
       case 'result': this.onResult(d); break;
       case 'type':
-        // during a duel, typed letters land in the DUEL grid, not the board
+        // typed letters land wherever the action is: duel grid, tower row, board
         if (m.duel && !m.duel.over) this.renderDuel();
+        else if (m.settings?.mode === 'tower') (m.myRevive() ? this.renderRevive() : this.renderTowerInput());
         else this.renderInputRow();
         (d.back ? sfx.back : sfx.key)();
         break;
-      case 'submit': sfx.flip(0); break;
+      case 'submit':
+        if (d.tower) this.renderTowerInput();
+        sfx.flip(0);
+        break;
+      case 'tower': this.renderTower(); if (m.tower && m.tower.stage > 1) { this.showToast(`✦ STAGE ${m.tower.stage} — new decree!`); sfx.win(); } break;
+      case 'towerword': this.onTowerWord(d); break;
+      case 'towermiss': this.renderTowerHud(); this.renderStrip(); this.renderShop(); this.shakeTower(); sfx.lose(); break;
+      case 'towerhunger': this.renderTowerHud(); this.renderStrip(); this.renderShop(); sfx.lose(); break;
+      case 'towerrev': this.onTowerRevive(d); break;
       case 'badguess': this.renderBoard(); this.shakeRow(); break;
       case 'shake': this.shakeRow(); sfx.invalid(); break;
       case 'toast': this.showToast(d.msg); break;
@@ -289,18 +324,26 @@ export class UI {
       }
     }
     $('set-ante').classList.toggle('hidden', s.mode !== 'royale');
-    $('set-words').classList.toggle('hidden', s.mode === 'royale');
+    $('set-words').classList.toggle('hidden', s.mode === 'royale' || s.mode === 'tower');
     $('set-diff').classList.toggle('hidden', s.mode === 'friend'); // FRIEND words are human-made
     $('words-one').classList.toggle('hidden', s.mode !== 'friend'); // 1-each is a FRIEND thing
+    $('set-timer').classList.toggle('hidden', s.mode === 'tower'); // the tower has hunger instead
+    // TOWER's LEVEL means ramp speed - only easy/med/hard apply
+    for (const btn of document.querySelectorAll('[data-setting="difficulty"] .seg-btn')) {
+      const towerless = ['standard', 'ramp'].includes(btn.dataset.val);
+      btn.classList.toggle('hidden', s.mode === 'tower' && towerless);
+    }
     $('mode-blurb').textContent = {
       classic: 'same word, everyone races — most points after all words wins',
       royale: 'endless words, ante into the pot, hit 0 = out. last standing wins',
       friend: `take turns setting secret words — ${s.words} each. stump people to score`,
+      tower: 'CO-OP: stack real words under the decree. misses cost lives. solo ok!',
     }[s.mode] || '';
-    const enough = m.players.filter((p) => p.connected).length >= 2;
+    const minP = s.mode === 'tower' ? 1 : 2;
+    const enough = m.players.filter((p) => p.connected).length >= minP;
     $('btn-start').classList.toggle('hidden', !m.isHost());
     $('btn-start').disabled = !enough;
-    $('btn-start').textContent = enough ? 'START' : 'NEED 2+ PLAYERS';
+    $('btn-start').textContent = enough ? 'START' : `NEED ${minP}+ PLAYERS`;
     $('lobby-wait').classList.toggle('hidden', m.isHost());
   }
 
@@ -309,15 +352,25 @@ export class UI {
     const m = this.mirror;
     const strip = $('players-strip');
     strip.replaceChildren();
+    const towerLives = m.settings?.mode === 'tower' && m.tower ? m.tower.lives : null;
     for (const p of m.players) {
-      strip.append(el('div', {
-        class: 'strip-p' + (p.alive ? '' : ' dead') + (p.connected ? '' : ' gone')
+      const downed = towerLives && (towerLives[p.id] ?? 0) <= 0;
+      const node = el('div', {
+        class: 'strip-p' + (p.alive && !downed ? '' : ' dead') + (p.connected ? '' : ' gone')
           + (m.round && m.round.setterId === p.id ? ' setter' : ''),
         'data-testid': `strip-${p.id}`,
         style: { '--sig': p.color },
       },
       el('span', { class: 'strip-name', text: (p.id === m.selfId ? '★ ' : '') + p.name }),
-      el('span', { class: 'strip-score', 'data-testid': `score-${p.id}`, text: p.score })));
+      el('span', { class: 'strip-score', 'data-testid': `score-${p.id}`, text: p.score.toLocaleString('en-US') }));
+      if (towerLives) {
+        const lives = towerLives[p.id] ?? 0;
+        node.append(el('span', {
+          class: 'strip-hearts', 'data-testid': `lives-${p.id}`,
+          text: lives > 0 ? '♥'.repeat(lives) : '\u{1F480}',
+        }));
+      }
+      strip.append(node);
     }
   }
 
@@ -402,6 +455,7 @@ export class UI {
     const m = this.mirror;
     $('ovl-reveal').classList.add('hidden');
     $('duel-panel').classList.add('hidden');
+    $('tower-panel').classList.add('hidden');
     $('game-main').classList.remove('hidden');
     this.renderRoundHeader();
     this.renderStrip();
@@ -604,12 +658,27 @@ export class UI {
     shop.classList.toggle('hidden', !visible);
     if (!visible) return;
     const me = m.me();
+    if (mode === 'tower') {
+      // the tower sells only revival
+      for (const btn of shop.querySelectorAll('.shop-btn')) {
+        const isRevive = btn.dataset.item === 'revive';
+        btn.classList.toggle('hidden', !isRevive);
+        if (isRevive) {
+          const someoneDowned = m.tower && m.players.some(
+            (p) => p.connected && (m.tower.lives[p.id] ?? 0) <= 0 && p.id !== m.selfId);
+          btn.disabled = !m.tower || !someoneDowned || m.myTowerLives() <= 0
+            || !!m.myRevive() || !me || me.score < SHOP.revive.price;
+        }
+      }
+      return;
+    }
     const r = m.round;
     const canBuy = r && r.phase === 'play' && !r.suspended && !r.timeUp && me && me.alive
       && !me.spectator && !r.done[m.selfId] && !m.reveal;
     for (const btn of shop.querySelectorAll('.shop-btn')) {
       const id = btn.dataset.item;
       const item = SHOP[id];
+      if (id === 'revive') { btn.classList.add('hidden'); continue; } // TOWER-only
       if (id === 'duel') {
         btn.classList.remove('hidden'); // Classic & Royale (shop is friend-hidden anyway)
         btn.disabled = !canBuy || !!m.duel;
@@ -634,7 +703,11 @@ export class UI {
     const box = $('picker-targets');
     box.replaceChildren();
     for (const p of m.players) {
-      if (p.id === m.selfId || !p.connected || !p.alive || p.spectator) continue;
+      if (p.id === m.selfId || !p.connected) continue;
+      if (item === 'revive') {
+        // revive targets are the FALLEN, not the living
+        if (!m.tower || (m.tower.lives[p.id] ?? 0) > 0) continue;
+      } else if (!p.alive || p.spectator) continue;
       box.append(el('button', {
         class: 'picker-target', 'data-testid': `pick-${p.id}`, style: { '--sig': p.color },
         text: p.name,
@@ -753,6 +826,155 @@ export class UI {
     else if (d.loser === m.selfId) sfx.lose();
   }
 
+  // ---------- TOWER ----------
+  renderTower() {
+    const m = this.mirror;
+    if (!m.tower) return;
+    $('game-main').classList.add('hidden');
+    $('setter-panel').classList.add('hidden');
+    $('duel-panel').classList.add('hidden');
+    $('tower-panel').classList.remove('hidden');
+    $('hdr-round').textContent = 'TOWER \u{1F5FC}';
+    $('hdr-pot').classList.add('hidden');
+    $('hdr-timer').classList.add('hidden');
+    $('decree').textContent = `\u{1F4DC} ${describeConstraint(m.tower.constraint)}`;
+    this.renderTowerHud();
+    this.renderTowerStack();
+    this.renderTowerInput();
+    this.renderRevive();
+    this.renderStrip();
+    this.renderShop();
+  }
+
+  renderTowerHud() {
+    const m = this.mirror;
+    const t = m.tower;
+    if (!t) return;
+    const team = m.players.reduce((s, p) => s + (p.score || 0), 0);
+    const scoreEl = $('team-score');
+    scoreEl.textContent = team.toLocaleString('en-US');
+    scoreEl.classList.remove('bump');
+    void scoreEl.offsetWidth;
+    scoreEl.classList.add('bump');
+    $('tower-height').textContent = `\u{1F5FC} ${t.height}`;
+    $('tower-stage').textContent = `✦ STAGE ${t.stage}`;
+    $('tower-combo').textContent = t.combo > 1 ? `\u{1F525} x${t.combo} COMBO` : '';
+  }
+
+  renderTowerStack() {
+    const m = this.mirror;
+    const t = m.tower;
+    const stack = $('tower-stack');
+    stack.replaceChildren();
+    // newest on top - the tower grows upward
+    for (const row of t.rows.slice(-8).reverse()) {
+      const p = m.player(row.pid);
+      const line = el('div', { class: 'tower-row', style: { '--sig': p ? p.color : '#888' } });
+      for (const ch of row.word) line.append(el('span', { class: 'tower-cell', text: ch.toUpperCase() }));
+      line.append(el('span', { class: 'tower-pts', text: `+${row.points.toLocaleString('en-US')}` }));
+      stack.append(line);
+    }
+  }
+
+  renderTowerInput() {
+    const m = this.mirror;
+    for (let c = 0; c < WORD_LEN; c++) {
+      const t = this.towerTiles[c];
+      const ch = m.input[c];
+      t.textContent = ch ? ch.toUpperCase() : '';
+      t.classList.toggle('filled', !!ch);
+    }
+    $('tower-input').classList.toggle('downed', m.myTowerLives() <= 0 && !m.myRevive());
+  }
+
+  shakeTower() {
+    const row = $('tower-input');
+    row.classList.remove('shake');
+    void row.offsetWidth;
+    row.classList.add('shake');
+  }
+
+  onTowerWord(d) {
+    const m = this.mirror;
+    this.renderTowerHud();
+    this.renderTowerStack();
+    this.renderTowerInput();
+    this.renderShop();
+    this.spawnFloat(`+${d.points.toLocaleString('en-US')}`, d.pid);
+    if (d.combo > 1 && d.combo % 5 === 0) this.spawnFloat(`\u{1F525} x${d.combo}!`, d.pid);
+    sfx.pot();
+  }
+
+  spawnFloat(text, pid) {
+    const m = this.mirror;
+    const layer = $('float-layer');
+    const p = m.player(pid);
+    const f = el('span', {
+      class: 'float-num',
+      text,
+      style: {
+        left: `${12 + Math.random() * 66}%`,
+        top: `${25 + Math.random() * 45}%`,
+        '--sig': p ? p.color : '#ffd76a',
+      },
+    });
+    layer.append(f);
+    setTimeout(() => f.remove(), 1600);
+  }
+
+  onTowerRevive(d) {
+    const m = this.mirror;
+    if (d.phase === 'end') {
+      const t = m.player(d.target), r = m.player(d.reviver);
+      this.showToast(d.ok
+        ? `✨ ${r?.name} revived ${t?.name}!`
+        : `\u{1F480} revive failed — the word was "${(d.secret || '').toUpperCase()}"`);
+      (d.ok ? sfx.win : sfx.lose)();
+    } else if (d.phase === 'start') {
+      sfx.buy();
+    } else {
+      sfx.flip(1);
+    }
+    this.renderRevive();
+    this.renderTowerHud();
+    this.renderStrip();
+    this.renderShop();
+  }
+
+  renderRevive() {
+    const m = this.mirror;
+    const t = m.tower;
+    const box = $('revive-box');
+    if (!t) { box.classList.add('hidden'); return; }
+    // show my own revive, else any teammate's rescue in progress
+    const mine = m.myRevive();
+    const entry = mine ? [m.selfId, mine]
+      : Object.entries(t.revives)[0] || null;
+    if (!entry) { box.classList.add('hidden'); return; }
+    const [reviverId, rev] = entry;
+    const reviver = m.player(reviverId), target = m.player(rev.target);
+    $('revive-title').textContent = reviverId === m.selfId
+      ? `✨ solve to revive ${target?.name}!`
+      : `✨ ${reviver?.name} is reviving ${target?.name}…`;
+    for (let r = 0; r < MAX_ROWS; r++) {
+      const row = rev.rows[r];
+      for (let c = 0; c < WORD_LEN; c++) {
+        const tile = this.reviveTiles[r][c];
+        tile.className = 'tile mini-duel';
+        if (row) {
+          tile.textContent = row.word[c].toUpperCase();
+          tile.classList.add(row.colors[c]);
+        } else if (r === rev.rows.length && reviverId === m.selfId) {
+          tile.textContent = (m.input[c] || '').toUpperCase();
+          tile.classList.add('active-row');
+        } else {
+          tile.textContent = '';
+        }
+      }
+    }
+    box.classList.remove('hidden');
+  }
+
   onResume() {
     $('duel-panel').classList.add('hidden');
     $('game-main').classList.remove('hidden');
@@ -779,8 +1001,14 @@ export class UI {
     this.show('scr-over');
     const winner = m.player(d.winner);
     const iWon = d.winner === m.selfId;
-    $('over-title').textContent = iWon ? '\u{1F308} YOU WIN! \u{1F308}' : winner ? `${winner.name} WINS!` : 'GAME OVER';
-    $('over-title').classList.toggle('mega-win', iWon);
+    if (d.height != null) {
+      // co-op tower: the height IS the trophy
+      $('over-title').textContent = `\u{1F5FC} THE TOWER FELL — HEIGHT ${d.height}`;
+      $('over-title').classList.add('mega-win');
+    } else {
+      $('over-title').textContent = iWon ? '\u{1F308} YOU WIN! \u{1F308}' : winner ? `${winner.name} WINS!` : 'GAME OVER';
+      $('over-title').classList.toggle('mega-win', iWon);
+    }
     const ol = $('standings');
     ol.replaceChildren();
     for (const p of d.standings) {
@@ -804,6 +1032,7 @@ export class UI {
     this.show('scr-game');
     this.buildOpponents();
     this.renderStrip();
+    if (m.settings?.mode === 'tower' && m.tower) { this.renderTower(); return; }
     if (m.round) this.onWord({ phase: m.round.phase, setterId: m.round.setterId });
     if (m.duel) { this.onDuelStart({ a: m.duel.a, b: m.duel.b, stake: m.duel.stake }); this.renderDuel(); }
   }
@@ -811,7 +1040,16 @@ export class UI {
   // ---------- ticker ----------
   tick() {
     const m = this.mirror;
-    if (!m || !m.round || m.over) return;
+    if (!m || m.over) return;
+    // tower: drain the hunger bar
+    if (m.settings?.mode === 'tower' && m.tower) {
+      const left = Math.max(0, m.tower.hungerAt - now());
+      const pct = Math.min(100, (left / m.tower.hungerMs) * 100);
+      $('hunger-fill').style.width = `${pct}%`;
+      $('hunger-fill').classList.toggle('starving', pct < 30);
+      return;
+    }
+    if (!m.round) return;
     const r = m.round;
     // pre-word countdown
     const cd = $('countdown');

@@ -440,6 +440,85 @@ input[type="text"], #inp-name, #inp-code {
   animation: cascade 1.2s ease both;
 }
 
+/* ============ TOWER: classic-RPG numbers-everywhere skin ============ */
+.tower-rpg {
+  position: relative;
+  gap: .55rem !important;
+  font-variant-numeric: tabular-nums;
+}
+.decree {
+  width: 100%; max-width: 30rem; text-align: center;
+  padding: .55rem .9rem; border-radius: .3rem;
+  font-weight: 900; letter-spacing: .1em; font-size: 1.02rem;
+  color: #ffe9b0;
+  background: linear-gradient(180deg, #241a08, #171106);
+  border: 2px solid #7a5c1e;
+  outline: 2px solid #3a2c0c; outline-offset: 3px;
+  box-shadow: 0 0 18px rgba(255, 200, 80, .25), inset 0 0 24px rgba(255, 190, 60, .08);
+  text-shadow: 0 0 10px rgba(255, 210, 90, .6);
+}
+.tower-hud { display: flex; flex-direction: column; align-items: center; gap: .25rem; width: 100%; }
+.team-score {
+  font-size: clamp(2.2rem, 9vw, 3.4rem); font-weight: 900; letter-spacing: .04em;
+  color: #ffd76a;
+  text-shadow: 0 0 6px rgba(255, 200, 60, .9), 0 0 22px rgba(255, 170, 30, .5),
+    0 2px 0 #7a5010;
+}
+.team-score.bump { animation: score-bump .35s ease-out; }
+@keyframes score-bump { 30% { transform: scale(1.12); filter: brightness(1.5); } }
+.tower-substats { display: flex; gap: 1rem; }
+.rpg-stat { font-weight: 800; color: #d7c290; font-size: .95rem; text-shadow: 0 0 8px rgba(255, 200, 80, .35); }
+.combo-stat { color: #ff9c4a; animation: pot-pulse 1.4s ease-in-out infinite; }
+.hunger-bar {
+  width: min(22rem, 80vw); height: .55rem; border-radius: .3rem;
+  background: #241a10; border: 1px solid #4a3618; overflow: hidden;
+}
+#hunger-fill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #ffb84f, #ff5e3a);
+  transition: width .25s linear;
+}
+#hunger-fill.starving { animation: pot-pulse .5s ease-in-out infinite; background: #ff3b3b; }
+.tower-stack { display: flex; flex-direction: column-reverse; gap: .22rem; min-height: 8rem; justify-content: flex-start; }
+.tower-row {
+  display: flex; gap: .2rem; align-items: center;
+  animation: tower-land .3s ease-out;
+}
+@keyframes tower-land { 0% { transform: translateY(-12px) scale(1.1); opacity: 0; } }
+.tower-cell {
+  display: grid; place-items: center;
+  width: 1.7rem; height: 1.7rem; border-radius: .18rem;
+  background: color-mix(in srgb, var(--sig) 26%, #1c1c1d);
+  border: 1px solid color-mix(in srgb, var(--sig) 55%, #333);
+  font-weight: 900; font-size: .95rem; color: #fff;
+}
+.tower-pts { margin-left: .5rem; font-weight: 900; color: #ffd76a; font-size: .85rem; text-shadow: 0 0 8px rgba(255, 200, 60, .7); }
+.tower-input { display: flex; gap: .3rem; }
+.tower-tile { width: 2.7rem; height: 2.7rem; font-size: 1.4rem; border-color: #7a5c1e; }
+.tower-tile.filled { border-color: #d7a93c; box-shadow: 0 0 10px rgba(255, 200, 80, .35); }
+.tower-input.downed { opacity: .25; filter: grayscale(1); }
+.strip-hearts { color: #ff5470; font-size: .8rem; letter-spacing: .05em; text-shadow: 0 0 6px rgba(255, 60, 90, .8); }
+.float-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.float-num {
+  position: absolute; font-weight: 900; font-size: clamp(1.2rem, 5vw, 1.9rem);
+  color: var(--sig, #ffd76a);
+  text-shadow: 0 0 8px color-mix(in srgb, var(--sig, #ffd76a) 80%, transparent), 0 2px 0 rgba(0,0,0,.6);
+  animation: float-num 1.5s ease-out forwards;
+}
+@keyframes float-num {
+  0% { transform: translateY(10px) scale(.5); opacity: 0; }
+  20% { opacity: 1; transform: translateY(0) scale(1.15); }
+  100% { transform: translateY(-70px) scale(1); opacity: 0; }
+}
+.revive-box {
+  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+  padding: .6rem; border-radius: .4rem;
+  background: #101a12; border: 1px solid #2c5c38;
+  box-shadow: 0 0 16px rgba(90, 220, 130, .25);
+}
+.revive-title { font-weight: 800; color: #9be8b0; font-size: .9rem; }
+.revive-board .tile { width: 2rem; height: 2rem; font-size: 1rem; border-left: 2px solid var(--tile-border); }
+
 /* ============ overlays ============ */
 .overlay {
   position: fixed; inset: 0; z-index: 50;

@@ -40,6 +40,12 @@ export const EV = {
   HINT: 'hint',          // {to, col, letter}
   PEEK: 'peek',          // {to, target, row, col, letter}
   SMUDGE: 'smudge',      // {to, letter}
+  // TOWER (co-op): one endless shared round, no reveal cycle
+  TOWER: 'twr',          // {stage, constraint, height, hungerMs, lives, scores, combo}
+  TOWER_WORD: 'twrword', // {pid, word, points, height, combo, stage}
+  TOWER_MISS: 'twrmiss', // {pid, word, reason, lives, combo}
+  TOWER_HUNGER: 'twrhunger', // {lives, downed}
+  TOWER_REVIVE: 'twrrev',    // {phase:'start'|'row'|'end', reviver, target, row?, word?, colors?, ok?, lives?, scores?, secret?}
   DUEL_START: 'duelstart', // {a, b, stake}
   DUEL_ROW: 'duelrow',   // {pid, row, word, colors, solved}
   DUEL_END: 'duelend',   // {winner, loser, stake, draw, word, scores, eliminated}

@@ -44,8 +44,29 @@ export const SHOP = {
   hint:   { price: 75,  emoji: '\u{1F4A1}', name: 'Hint',   desc: 'Reveal one green letter in your own grid', target: null },
   smudge: { price: 100, emoji: '\u{1F5D1}️', name: 'Smudge', desc: "Un-gray one letter on an opponent's keyboard", target: 'opponent' },
   duel:   { price: 0,   emoji: '⚔️',  name: 'Duel',   desc: 'Stake points, alternate guesses on a fresh word (Classic & Royale)', target: 'opponent' },
+  revive: { price: 5000, emoji: '✨', name: 'Revive', desc: 'TOWER only: solve a classic wordle to bring a fallen teammate back with 2 lives', target: 'downed' },
 };
 export const FREEZE_MS = 5000;
+
+// TOWER mode (co-op, 1-4 players, endless): stack valid words under an
+// escalating DECREE. Misses cost lives; the hunger clock keeps the team
+// moving; scores are RPG-huge on purpose.
+export const TOWER = {
+  lives: 3,
+  reviveCost: 5000,
+  reviveLives: 2,          // a revived teammate comes back with 2
+  rampWords: { easy: 20, medium: 12, hard: 7 }, // words per decree stage
+  hungerMs: { easy: 45000, medium: 35000, hard: 25000 }, // silence = everyone bleeds
+  base: 500,               // per-word base, before letter values and stage
+  perLetterValue: 50,      // * scrabble-ish letter value
+  comboPct: 0.1,           // * combo count, multiplicative
+  minWordsPerDecree: 4,    // a decree must leave at least this many words possible
+};
+export const LETTER_VALUES = {
+  a: 1, e: 1, i: 1, o: 1, u: 1, l: 1, n: 1, s: 1, t: 1, r: 1,
+  d: 2, g: 2, b: 3, c: 3, m: 3, p: 3, f: 4, h: 4, v: 4, w: 4, y: 4,
+  k: 5, j: 8, x: 8, q: 10, z: 10,
+};
 
 // FRIEND mode: the setter's heckling palette, one tap per guesser panel.
 export const REACTIONS = ['\u{1F602}', '\u{1F525}', '\u{1F631}', '\u{1F440}', '\u{1F480}', '\u{1FAE0}', '\u{1F9E0}'];

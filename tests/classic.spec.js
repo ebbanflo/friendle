@@ -49,10 +49,14 @@ test('classic: full 3-word match with live color-only mirroring and scoring', as
   await expect(oppTile).toHaveClass(new RegExp(`\\b${gs.round.grids[guestId][0].colors[0]}\\b`));
   await expect(oppTile).toHaveText('');
 
-  // the secret never crossed the wire before the reveal
+  // the secret never crossed the wire before the reveal (roster messages are
+  // exempt: their JSON keys like "color"/"score" are themselves 5-letter
+  // words and once flaked this test when "color" WAS the secret)
   for (const line of await wireLog(guest)) {
     const env = JSON.parse(line);
-    if (env.t !== 'reveal') expect(line).not.toContain(`"${word1}"`);
+    if (!['reveal', 'lobby', 'start', 'gameover'].includes(env.t)) {
+      expect(line).not.toContain(`"${word1}"`);
+    }
   }
 
   // host solves -> first-solver points; guest finishes the word without solving

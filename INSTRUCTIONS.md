@@ -134,6 +134,26 @@ resume` with the word timer suspended.
   panel everywhere plus a big splash on the target's own board. STILL-
   COMPETING guessers never get each other's letters.
 
+### TOWER mode (co-op, endless)
+
+One shared endless "round" outside the word-cycle machinery: `engine.tower`
+holds stage/height/combo/lives/used-words/revives; there is no `round` and no
+reveal cycle. Solo starts are allowed (`minPlayers()` is 1 for tower).
+Protocol: `twr` (full state on start/stage-change), `twrword` (accepted word:
+clients apply the score DELTA locally - lean protocol), `twrmiss` (life
+lost), `twrhunger` (silence bled everyone), `twrrev` (revive minigame
+start/row/end - letters are public, it's co-op). Rules live in `js/tower.js`
+(pure, node-importable, unit-tested): decree generation walks 8 escalation
+tiers then piles on bans; every generated decree is verified to leave at
+least `minWordsPerDecree` unused dictionary words. Tower submissions are NOT
+pre-validated client-side - pressing enter on a bad word is how lives are
+lost, by design (only the revive wordle gets the friendly local dictionary
+check). The hunger timer re-arms on every accepted word; `settings.rampWords`
+/ `settings.hungerMs` are debug-only overrides used by tests. LEVEL in tower
+means ramp speed (easy 20 / medium 12 / hard 7 words per stage);
+standard/ramp fall back to medium. Scoring is deliberately RPG-huge
+(`wordPoints`: base + letter values, x stage, x combo).
+
 ## Known traps (each one bit us or will bite you)
 
 1. **The event registry.** Every host broadcast type lives in
