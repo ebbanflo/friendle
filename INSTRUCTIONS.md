@@ -239,7 +239,9 @@ too.
    `page.evaluate` (see powerups.spec.js), which is also how you verify the
    host rejects a raw forged intent.
 7. **GitHub Pages subpath**: all URLs in the code are relative and `.nojekyll`
-   exists. Don't introduce absolute `/paths`.
+   exists. Don't introduce absolute `/paths`. This includes `manifest.json`'s
+   own paths (`icons/...`, `start_url: "."`, `scope: "."`) - keep them
+   relative or "Add to Home Screen" breaks on the Pages subpath.
 8. **Room codes** use an alphabet without O/0/I/1. Keep it that way; support
    tickets about `O` vs `0` are self-inflicted.
 9. **Presence is late, sparse, and only fires on change.** Two corollaries,
@@ -285,6 +287,22 @@ Royale matches to a winner (antes, rolling pots, a duel, eliminations),
 FRIEND with typed secrets and setter rotation, all four power-ups plus shop
 guardrails, timers, quitting (guest and host), and a 4-player room with a
 bounced 5th player.
+
+## App icon / "Add to Home Screen"
+
+`icons/*.png` (apple-touch-icon at 180/152/167, icon-192, icon-512) are
+rasterized once from a source SVG (2x2 tile grid in the four
+`PLAYER_COLORS`, full-bleed with NO pre-rounded corners - iOS applies its
+own corner mask, so a pre-rounded icon double-rounds or shows background
+through the gap) via headless Chromium screenshot - there's no ImageMagick/
+sharp dependency, just `chromium.launch()` + `page.screenshot()` on an
+`<img>` tag pointed at a `data:image/svg+xml;base64,...` URL. Regenerate by
+recreating that render script if the design ever changes; the SVG source
+itself isn't checked in (only the rendered PNGs are - this repo has no
+build step, and the icons are small/static enough not to need one).
+`manifest.json` + the `apple-mobile-web-app-*` meta tags in `index.html`
+make "Add to Home Screen" launch standalone (no Safari chrome), not just
+bookmark the page with a custom icon.
 
 ## Word lists & difficulty tiers
 

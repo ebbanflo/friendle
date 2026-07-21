@@ -1,0 +1,15 @@
+{
+  "name": "FRIENDLE — wordle with friends, as a battle",
+  "short_name": "FRIENDLE",
+  "description": "Wordle with friends, as a battle. Room-code multiplayer word game.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#121213",
+  "theme_color": "#121213",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

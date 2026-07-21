@@ -6,6 +6,18 @@
 <meta name="theme-color" content="#121213">
 <title>FRIENDLE — wordle with friends, as a battle</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='18' fill='%23121213'/><rect x='14' y='14' width='32' height='32' rx='6' fill='%2358f26f'/><rect x='54' y='14' width='32' height='32' rx='6' fill='%23f2d558'/><rect x='14' y='54' width='32' height='32' rx='6' fill='%23f258d5'/><rect x='54' y='54' width='32' height='32' rx='6' fill='%233a3a3c'/></svg>">
+
+<!-- iOS "Add to Home Screen": a full-bleed PNG (iOS masks corners itself,
+     so this must NOT be pre-rounded) plus the standalone-launch meta tags
+     so it opens like an app, not a Safari bookmark. -->
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icons/apple-touch-icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icons/apple-touch-icon-167.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FRIENDLE">
+<link rel="manifest" href="manifest.json">
+
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
