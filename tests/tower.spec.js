@@ -1,9 +1,13 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { GUESSES } from '../data/guesses.js';
 import { matchesConstraint, genConstraint, countPossible, wordPoints } from '../js/tower.js';
 import {
   openPage, hostGame, joinGame, startGame, state, engineState, setScore, buy, FAST,
 } from './helpers.js';
+
+const STYLE_CSS_PATH = fileURLToPath(new URL('../css/style.css', import.meta.url));
 
 // find dictionary words satisfying a decree, skipping anything already used
 function findWords(constraint, used, n) {
@@ -404,5 +408,107 @@ test.describe('tower mode', () => {
     for (let i = 0; i < 10; i++) expect(await cellsOf(rows.nth(i))).not.toBe(words[0]);
     // but it's still real height/score, just not rendered
     expect((await towerState(host)).height).toBe(14);
+  });
+
+  test('pause works in tower mode (regression: header needs top safe-area padding)', async ({ context }) => {
+    // Root cause of the reported bug: apple-mobile-web-app-status-bar-style
+    // is black-translucent (added with the PWA icon), which makes standalone
+    // iOS render edge-to-edge under the notch/status bar. #scr-game's header
+    // only had BOTTOM safe-area padding, so on a real device the header
+    // (shared by every mode - Classic/Royale/FRIEND/TOWER all use it) sits
+    // partly under the notch and its buttons become untappable. Headless
+    // Chromium always resolves env(safe-area-inset-top) to 0, so this test
+    // can't reproduce the geometry directly, but it locks in the fix (the
+    // CSS rule existing) and proves the pause mechanism itself - and the
+    // full pause/resume/still-playable cycle - works correctly in tower mode.
+    const cssText = readFileSync(STYLE_CSS_PATH, 'utf8');
+    expect(cssText).toMatch(/#scr-game\s*\{[^}]*env\(safe-area-inset-top\)/);
+
+    const host = await openPage(context);
+    await hostGame(host, 'PAUSER', { ...FAST, mode: 'tower', rampWords: 999, hungerMs: 600000 });
+    await host.click('#btn-start');
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+
+    await host.click('#btn-pause');
+    await expect(host.locator('#ovl-pause')).toBeVisible();
+    expect(await host.evaluate(() => window.__friendle.ui.paused)).toBe(true);
+
+    await host.click('#btn-resume');
+    await expect(host.locator('#ovl-pause')).toBeHidden();
+    expect(await host.evaluate(() => window.__friendle.state().inputLocked)).toBe(false);
+
+    // still fully playable after a pause/resume cycle
+    let t = await towerState(host);
+    const [w1] = findWords(t.constraint, [], 1);
+    await climb(host, w1);
+    expect((await towerState(host)).height).toBe(1);
+  });
+
+  test('revive replaces the tower stack (fixed height, keyboard never moves) and bystanders keep climbing', async ({ context }) => {
+    test.setTimeout(60000);
+    const host = await openPage(context); // will be the reviver
+    const code = await hostGame(host, 'MEDIC', { ...FAST, mode: 'tower', rampWords: 999, hungerMs: 600000 });
+    const pA = await openPage(context); // will be downed / revived
+    await joinGame(pA, code, 'FALLEN');
+    const pB = await openPage(context); // bystander: keeps climbing throughout
+    await joinGame(pB, code, 'ROGUE');
+    await host.waitForFunction(() => window.__friendle.state().players.length === 3);
+    const hostId = await host.evaluate(() => window.__friendle.selfId);
+    const aId = await pA.evaluate(() => window.__friendle.selfId);
+    await startGame(host, [host, pA, pB]);
+    await Promise.all([host, pA, pB].map((p) =>
+      p.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 })));
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+
+    const keyboardY = (page) => page.locator('#keyboard').boundingBox().then((b) => b.y);
+    const yBefore = await keyboardY(host);
+    await expect(host.locator('#tower-stack')).toBeVisible();
+    await expect(host.locator('#revive-box')).toBeHidden();
+
+    // A goes down
+    await miss(pA, 'zzzzz'); await miss(pA, 'qqqqq'); await miss(pA, 'jjjjj');
+    await pA.waitForFunction(() => window.__friendle.state().inputLocked, null, { polling: 100 });
+
+    await setScore(host, hostId, 50000);
+    await host.click('[data-testid="shop-revive"]');
+    await host.click(`[data-testid="pick-${aId}"]`);
+    await host.click('#btn-picker-go');
+    await host.waitForFunction(() => !!window.__friendle.state().tower.revives[window.__friendle.selfId], null, { polling: 100 });
+    await pA.waitForFunction(() => Object.keys(window.__friendle.state().tower.revives).length > 0, null, { polling: 100 });
+    await pB.waitForFunction(() => Object.keys(window.__friendle.state().tower.revives).length > 0, null, { polling: 100 });
+
+    // the swap: stack hidden, revive box visible, on EVERY screen
+    for (const page of [host, pA, pB]) {
+      await expect(page.locator('#tower-stack')).toBeHidden();
+      await expect(page.locator('#revive-box')).toBeVisible();
+    }
+    // #tower-input itself is NEVER hidden - hiding it would shrink the panel
+    // and shift the keyboard exactly like the bug being fixed. The reviewer's
+    // copy just renders blank (redundant with the revive board's own row);
+    // the bystander's stays fully visible AND usable.
+    await expect(host.locator('#tower-input')).toBeVisible();
+    await expect(host.locator('[data-testid="twr-in-0"]')).toHaveText('');
+    await expect(pB.locator('#tower-input')).toBeVisible();
+
+    // the keyboard has not moved a single pixel despite the swap
+    expect(await keyboardY(host)).toBe(yBefore);
+
+    // the bystander can still climb the (hidden) tower normally mid-revive
+    let t = await towerState(pB);
+    const [wB] = findWords(t.constraint, [], 1);
+    await climb(pB, wB);
+    expect((await towerState(pB)).height).toBe(1);
+
+    // solve the revive - the tower comes back for everyone, keyboard still stable
+    const secret = await host.evaluate((pid) => window.__friendle.reviveSecret(pid), hostId);
+    await host.evaluate((w) => window.__friendle.guess(w), secret);
+    await pA.waitForFunction((id) => window.__friendle.state().tower.lives[id] === 2, aId, { polling: 100 });
+
+    for (const page of [host, pA, pB]) {
+      await expect(page.locator('#tower-stack')).toBeVisible();
+      await expect(page.locator('#revive-box')).toBeHidden();
+    }
+    await expect(host.locator('#tower-input')).toBeVisible();
+    expect(await keyboardY(host)).toBe(yBefore);
   });
 });

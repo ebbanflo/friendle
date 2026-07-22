@@ -898,9 +898,14 @@ export class UI {
 
   renderTowerInput() {
     const m = this.mirror;
+    // Blank (not hidden) while I'm the active reviewer: my typing already
+    // renders live inside the revive board, and this row stays in the
+    // layout so the panel's height - and the keyboard below it - never
+    // shifts just because a revive started or ended.
+    const blank = m.myRevive();
     for (let c = 0; c < WORD_LEN; c++) {
       const t = this.towerTiles[c];
-      const ch = m.input[c];
+      const ch = !blank && m.input[c];
       t.textContent = ch ? ch.toUpperCase() : '';
       t.classList.toggle('filled', !!ch);
     }
@@ -984,6 +989,17 @@ export class UI {
     const t = m.tower;
     const box = $('revive-box');
     if (!t) { box.classList.add('hidden'); return; }
+    // The revive board takes the tower stack's PLACE (same fixed height,
+    // see CSS) while ANY rescue is in progress - one less thing competing
+    // for space on a phone, and the keyboard never shifts either way.
+    // #tower-input itself is never hidden (that would shrink the panel and
+    // shift the keyboard too) - renderTowerInput() just renders it blank
+    // for the active reviewer, since their typing already shows live inside
+    // the revive board and duplicating it there would be clutter.
+    const anyRevive = Object.keys(t.revives).length > 0;
+    $('tower-stack').classList.toggle('hidden', anyRevive);
+    this.renderTowerInput();
+    if (!anyRevive) { box.classList.add('hidden'); return; }
     // show my own revive, else any teammate's rescue in progress
     const mine = m.myRevive();
     const entry = mine ? [m.selfId, mine]
@@ -1093,7 +1109,7 @@ export class UI {
         fill.style.width = `${pct}%`;
         fill.classList.toggle('starving', pct < 30);
       }
-      $('hunger-label').classList.toggle('hidden', !m.tower.hungerPaused);
+      $('hunger-label').classList.toggle('inactive', !m.tower.hungerPaused);
       return;
     }
     if (!m.round) return;

@@ -198,7 +198,16 @@ input[type="text"], #inp-name, #inp-code {
 .row-gap { display: flex; gap: 1rem; }
 
 /* ============ game layout ============ */
-#scr-game { justify-content: flex-start; gap: .4rem; padding: .5rem .5rem calc(.5rem + env(safe-area-inset-bottom)); }
+/* Standalone iOS (Add to Home Screen) renders edge-to-edge under the
+   notch/status bar (apple-mobile-web-app-status-bar-style=black-translucent
+   in index.html) - without the top inset here, the header's pause/help/quit
+   buttons land partly under the status bar and become untappable. Shared by
+   every mode (Classic/Royale/FRIEND/TOWER all use #scr-game), so this one
+   fix covers all of them. */
+#scr-game {
+  justify-content: flex-start; gap: .4rem;
+  padding: calc(.5rem + env(safe-area-inset-top)) .5rem calc(.5rem + env(safe-area-inset-bottom));
+}
 .game-header {
   width: 100%; max-width: 34rem; display: flex; align-items: center; gap: .6rem;
 }
@@ -488,12 +497,19 @@ input[type="text"], #inp-name, #inp-code {
   font-size: .72rem; font-weight: 800; letter-spacing: .06em; color: #8fe0ff;
   text-shadow: 0 0 8px rgba(80, 200, 255, .6); margin-top: .1rem;
 }
+/* visibility (not display:none) - its space stays reserved in .tower-hud even
+   when inactive, so a revive starting/ending never shifts the stack/keyboard
+   below it just because this line popped in or out. */
+.hunger-label.inactive { visibility: hidden; }
 /* Fixed to hold exactly TOWER_VISIBLE_ROWS (10) rows: 10 * 1.7rem tiles +
    9 * .22rem gaps. A fixed height (not min-height) is the point - the
    footprint never grows as the tower fills, so nothing below it (the
    keyboard) ever shifts. Keep in sync with TOWER_VISIBLE_ROWS in ui.js. */
 .tower-stack {
-  display: flex; flex-direction: column-reverse; gap: .22rem;
+  /* width:100% is load-bearing, not decoration: .game-panel centers its flex
+     items (align-items:center), so with zero rows (a fresh tower) this
+     collapses to zero width and effectively vanishes without it. */
+  display: flex; flex-direction: column-reverse; gap: .22rem; width: 100%;
   height: 19rem; overflow: hidden; justify-content: flex-start;
 }
 .tower-stack.bonus-pulse { animation: cascade 1s ease; }
@@ -528,7 +544,12 @@ input[type="text"], #inp-name, #inp-code {
   100% { transform: translateY(-70px) scale(1); opacity: 0; }
 }
 .revive-box {
-  display: flex; flex-direction: column; align-items: center; gap: .4rem;
+  /* Matches .tower-stack's fixed height exactly (box-sizing so the border
+     doesn't push it over) - it visually REPLACES the stack while a rescue
+     is in progress (see ui.js renderRevive), so the swap must not itself
+     change the panel's total height or the keyboard below it would shift. */
+  box-sizing: border-box; height: 19rem; width: 100%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .5rem;
   padding: .6rem; border-radius: .4rem;
   background: #101a12; border: 1px solid #2c5c38;
   box-shadow: 0 0 16px rgba(90, 220, 130, .25);
