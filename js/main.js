@@ -164,6 +164,7 @@ function installDebug() {
         combo: S.engine.tower.combo, constraint: S.engine.tower.constraint,
         lives: { ...S.engine.tower.lives }, used: S.engine.tower.used.size,
         rampWords: S.engine.tower.rampWords, hungerMs: S.engine.tower.hungerMs,
+        difficulty: S.engine.tower.difficulty,
         hungerPaused: !!S.engine.tower.hungerPaused,
         revives: Object.keys(S.engine.tower.revives),
       },

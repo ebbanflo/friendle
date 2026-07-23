@@ -54,14 +54,14 @@ other's colors. No power-ups here — it's pure.
 ### TOWER 🗼
 Barely Wordle at all — and gloriously so. **Co-op, 1–4 players** (solo climbs
 welcome), endless. The team races to stack real 5-letter words into a tower,
-but every word must obey the **DECREE** at the top of the screen — and the
-decree escalates: use this letter → use two → a letter in a specific slot →
-two slotted letters → forbidden letters → **NO VOWELS**, and it keeps
-twisting from there. The host sets **DECREE** directly — a slider from 2 to
-10 words per stage. Counterintuitively, *lower is easier*: a small number
-cycles you to a fresh constraint before your collective vocabulary for the
-current one runs dry, while a high number forces the team to keep digging
-for distinct words under the same brutal rule until you're stuck.
+but every word must obey the **DECREE** at the top of the screen. Two
+independent settings shape it: **LEVEL** (EASY / MED / HARD / RAMP) picks the
+decree's difficulty — EASY/MED/HARD hold steady all game, RAMP starts easy
+and climbs to hard, then stays there instead of spiraling into oblivion.
+HARD isn't just "no vowels" on repeat, either — expect rare letters, words
+where the first and last letter match, exact vowel counts, and other twists
+alongside the classic letter-bans, all rotating for variety. **DECREE** is
+the separate pacing knob — 3, 5, or 10 words before the decree changes.
 
 Everyone has **3 lives**. A submission that isn't a real word, repeats the
 tower, or breaks the decree costs one — and so does silence: leave the

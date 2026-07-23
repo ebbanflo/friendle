@@ -80,7 +80,7 @@
       <div class="setting" id="set-diff">
         <span class="setting-label">LEVEL</span>
         <div class="seg" role="radiogroup" data-setting="difficulty">
-          <button data-val="standard" class="seg-btn">STD</button>
+          <button data-val="standard" class="seg-btn" id="diff-standard">STD</button>
           <button data-val="easy" class="seg-btn">EASY</button>
           <button data-val="medium" class="seg-btn">MED</button>
           <button data-val="hard" class="seg-btn">HARD</button>
@@ -89,9 +89,10 @@
       </div>
       <div class="setting hidden" id="set-ramp">
         <span class="setting-label">DECREE</span>
-        <div class="ramp-slider">
-          <input id="ramp-range" type="range" min="2" max="10" step="1" value="5">
-          <output id="ramp-out">5</output><span class="ramp-unit">words</span>
+        <div class="seg" role="radiogroup" data-setting="rampWords">
+          <button data-val="3" class="seg-btn">3</button>
+          <button data-val="5" class="seg-btn">5</button>
+          <button data-val="10" class="seg-btn">10</button>
         </div>
       </div>
       <div class="setting hidden" id="set-ante">
@@ -219,12 +220,13 @@
       <h3>CLASSIC</h3>
       <p>Host picks 3 / 5 / 10 words. First solver gets full points (base + speed + fewer-guess bonus), later solvers get a cut. Most points wins.</p>
       <p><b>LEVEL</b> (Classic &amp; Royale): STD = any word, classic style · EASY / MED / HARD = words from that difficulty band · RAMP = starts easy, ends mean.</p>
+      <p class="setter-tip">TOWER uses this same LEVEL row for its DECREES: EASY / MED / HARD keep every decree at that difficulty all game, RAMP climbs from easy to hard and stays there (no STD option there — it has no meaning for decrees).</p>
       <h3>ROYALE ∞</h3>
       <p>Everyone starts with 1000 points. Each word, every survivor antes into a pot — the first solver takes it all (unsolved pots roll over and grow). Hit 0 and you're out, spectating. Last player standing wins.</p>
       <h3>FRIEND 💗</h3>
       <p>One player is the <b>setter</b> and secretly types their own word; everyone else races to guess it. Host picks 1/3/5/10 words <b>each</b> — every player sets that many. Scoring is <b>fewest guesses</b>, not speed, and the setter scores <b>per guesser they stump</b>. The setter watches every grid <b>with the actual letters</b> and flings emoji reactions; solve the word and you join the letter-vision club too. Still-competing guessers only see colors. No shop — it's pure.</p>
       <h3>TOWER 🗼</h3>
-      <p><b>Co-op, 1–4 players, endless.</b> Stack real 5-letter words into a shared tower — every word must obey the escalating <b>DECREE</b> (use a letter → slotted letters → bans → no vowels…). The host sets <b>DECREE</b> directly: 2–10 words before it escalates. Counterintuitively, LOWER is easier — you cycle to a fresh constraint before the team's vocabulary for the current one runs dry; a high count forces you to keep digging for distinct words under the same brutal rule. Bad words, repeats, decree-breakers and letting the hunger bar empty all cost lives (3 each, capped at 5). Downed? A teammate can buy ✨ <b>Revive</b> (5000) and solve a classic wordle to bring you back with 2 lives — starting a revive <b>pauses the hunger clock</b> for everyone (untimed!) and it resumes fresh once the rescue ends. Every <b>10th floor</b> the whole team gets a bonus heart (reviving anyone downed), and if the tower's stack happens to spell <b>T-O-W-E-R</b> down a column, that's a bonus heart too. All down = the tower falls; height is glory. Big numbers guaranteed.</p>
+      <p><b>Co-op, 1–4 players, endless.</b> Stack real 5-letter words into a shared tower — every word must obey the current <b>DECREE</b> (use a letter → slotted letters → bans → no vowels → and stranger twists at HARD: a rare letter, matching first/last letters, exact vowel counts…). LEVEL picks the decree difficulty (EASY/MED/HARD stay put, RAMP climbs and then holds at hard); <b>DECREE</b> is a separate pacing knob — 3, 5, or 10 words before it changes. Bad words, repeats, decree-breakers and letting the hunger bar empty all cost lives (3 each, capped at 5). Downed? A teammate can buy ✨ <b>Revive</b> (5000) and solve a classic wordle to bring you back with 2 lives — starting a revive <b>pauses the hunger clock</b> for everyone (untimed!) and it resumes fresh once the rescue ends. Every <b>10th floor</b> the whole team gets a bonus heart (reviving anyone downed), and if the tower's stack happens to spell <b>T-O-W-E-R</b> down a column, that's a bonus heart too. All down = the tower falls; height is glory. Big numbers guaranteed.</p>
       <h3>POWER-UP SHOP <small>(Classic &amp; Royale)</small></h3>
       <p>🔍 <b>Peek 75</b> — see one real letter of a rival's latest guess<br>
       🧊 <b>Freeze 100</b> — lock rivals' keyboards for 5s<br>

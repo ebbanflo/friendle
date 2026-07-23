@@ -52,6 +52,19 @@ test.describe('tower mode', () => {
     expect(matchesConstraint('crane', { ban: ['z', 'q'] })).toBe(true);
     expect(matchesConstraint('crane', { ban: ['a'] })).toBe(false);
     expect(matchesConstraint('nymph', { ban: ['a', 'e', 'i', 'o', 'u'] })).toBe(true); // no-vowels tier is real
+    // the newer "experimental" hard predicates
+    expect(matchesConstraint('level', { bookend: true })).toBe(true);   // l...l
+    expect(matchesConstraint('crane', { bookend: true })).toBe(false);
+    expect(matchesConstraint('puppy', { rep: true })).toBe(true);       // double p
+    expect(matchesConstraint('crane', { rep: true })).toBe(false);
+    expect(matchesConstraint('crane', { uniq: true })).toBe(true);      // all distinct
+    expect(matchesConstraint('puppy', { uniq: true })).toBe(false);
+    expect(matchesConstraint('crane', { vmin: 2 })).toBe(true);         // a, e
+    expect(matchesConstraint('nymph', { vmin: 1 })).toBe(false);        // 0 vowels
+    expect(matchesConstraint('crane', { vmin: 1, vmax: 1 })).toBe(false); // has 2, not exactly 1
+    expect(matchesConstraint('quiet', { dvowel: true })).toBe(true);    // u,i adjacent
+    expect(matchesConstraint('crane', { dvowel: true })).toBe(false);
+
     const used = new Set();
     for (let stage = 1; stage <= 12; stage++) {
       for (let k = 0; k < 5; k++) {
@@ -340,42 +353,84 @@ test.describe('tower mode', () => {
     }, [hostId, aId, await pB.evaluate(() => window.__friendle.selfId)], { polling: 100, timeout: 15000 });
   });
 
-  test('lobby DECREE slider: host drags it, 2-10 range, live-syncs to guests, drives real pacing', async ({ context }) => {
+  test('lobby LEVEL + DECREE: tower reuses the LEVEL row (no STD), DECREE is 3/5/10, both live-sync and drive real pacing', async ({ context }) => {
     const host = await openPage(context);
     const code = await hostGame(host, 'DEALER', FAST);
     const guest = await openPage(context);
     await joinGame(guest, code, 'WATCH');
     await host.waitForFunction(() => window.__friendle.state().players.length === 2);
 
-    // switch to TOWER: the old EASY/MED/HARD/STD/RAMP row disappears,
-    // the DECREE slider appears instead, defaulted mid-range
+    // switch to TOWER: LEVEL stays visible (STD hides, EASY/MED/HARD/RAMP
+    // remain) and defaults to RAMP; DECREE (3/5/10) appears too
     await host.evaluate(() => window.__friendle.setSettings({ mode: 'tower' }));
-    await expect(host.locator('#set-diff')).toBeHidden();
+    await expect(host.locator('#set-diff')).toBeVisible();
+    await expect(host.locator('#diff-standard')).toBeHidden();
+    await expect(host.locator('[data-setting="difficulty"] [data-val="ramp"]')).toHaveClass(/\bon\b/);
     await expect(host.locator('#set-ramp')).toBeVisible();
-    const range = host.locator('#ramp-range');
-    await expect(range).toHaveAttribute('min', '2');
-    await expect(range).toHaveAttribute('max', '10');
-    expect(await range.inputValue()).toBe('5'); // TOWER.defaultRampWords
+    await expect(host.locator('[data-setting="rampWords"] [data-val="5"]')).toHaveClass(/\bon\b/); // TOWER.defaultRampWords
 
-    // guest cannot drag it (not host) - reflected as disabled
-    await expect(guest.locator('#ramp-range')).toBeDisabled();
+    // guest cannot change either (not host) - reflected as disabled
+    await expect(guest.locator('[data-setting="difficulty"] [data-val="hard"]')).toBeDisabled();
+    await expect(guest.locator('[data-setting="rampWords"] [data-val="3"]')).toBeDisabled();
 
-    // host drags to 2 (the "easy" end, per the counterintuitive finding);
-    // fill() on a range input fires input+change, matching real drag behavior
-    await range.fill('2');
-    await guest.waitForFunction(() => window.__friendle.state().settings?.rampWords === 2, null, { polling: 100 });
-    expect(await guest.locator('#ramp-out').textContent()).toBe('2');
+    // host picks HARD + DECREE 3 - live-syncs to the guest
+    await host.click('[data-setting="difficulty"] [data-val="hard"]');
+    await host.click('[data-setting="rampWords"] [data-val="3"]');
+    await guest.waitForFunction(() => window.__friendle.state().settings?.rampWords === 3
+      && window.__friendle.state().settings?.difficulty === 'hard', null, { polling: 100 });
+    await expect(guest.locator('[data-setting="difficulty"] [data-val="hard"]')).toHaveClass(/\bon\b/);
+    await expect(guest.locator('[data-setting="rampWords"] [data-val="3"]')).toHaveClass(/\bon\b/);
 
-    // and it actually drives pacing: stage 2 arrives after just 2 words
+    // and it actually drives pacing: stage 2 arrives after just 3 words, on the hard pool
     await startGame(host, [host, guest]);
     await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
-    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
-    expect((await host.evaluate(() => window.__friendle.engineState().tower)).rampWords).toBe(2);
-    const words = GUESSES.filter((w) => /^[a-z]{5}$/.test(w)).slice(0, 5);
-    await climb(host, words[0]);
-    expect((await towerState(host)).stage).toBe(1);
-    await climb(host, words[1]);
+    const towerNow = await host.evaluate(() => window.__friendle.engineState().tower);
+    expect(towerNow.rampWords).toBe(3);
+    expect(towerNow.difficulty).toBe('hard');
+    let t = await towerState(host);
+    for (let i = 0; i < 2; i++) {
+      const [w] = findWords(t.constraint, await usedWords(host), 1);
+      await climb(host, w);
+      t = await towerState(host);
+    }
+    expect(t.stage).toBe(1);
+    const [wLast] = findWords(t.constraint, await usedWords(host), 1);
+    await climb(host, wLast);
     await host.waitForFunction(() => window.__friendle.state().tower.stage === 2, null, { polling: 100 });
+  });
+
+  test('decree difficulty pools: easy/medium/hard/ramp are all survivable over a long game, and hard is more than just no-vowels', () => {
+    for (const difficulty of ['easy', 'medium', 'hard', 'ramp']) {
+      const used = new Set();
+      const seen = new Set();
+      for (let stage = 1; stage <= 60; stage++) {
+        const c = genConstraint(stage, used, difficulty, 10);
+        // every decree this deep in a long game can still supply the full
+        // 10-word requirement - nobody gets mathematically stranded
+        expect(countPossible(c, used)).toBeGreaterThanOrEqual(10);
+        seen.add(JSON.stringify(c));
+        // consume some of its pool, like a real game would
+        let taken = 0;
+        for (const w of GUESSES) {
+          if (taken >= 10) break;
+          if (!used.has(w) && matchesConstraint(w, c)) { used.add(w); taken += 1; }
+        }
+      }
+      expect(seen.size).toBeGreaterThan(5); // real variety, not one repeated decree
+    }
+    // hard mode specifically must not be exclusively vowel-banning
+    const used = new Set();
+    let nonVowelHard = 0;
+    for (let stage = 6; stage <= 60; stage++) {
+      const c = genConstraint(stage, used, 'hard', 5);
+      if (!(c.ban && ['a', 'e', 'i', 'o', 'u'].every((v) => c.ban.includes(v)))) nonVowelHard += 1;
+      let taken = 0;
+      for (const w of GUESSES) {
+        if (taken >= 5) break;
+        if (!used.has(w) && matchesConstraint(w, c)) { used.add(w); taken += 1; }
+      }
+    }
+    expect(nonVowelHard).toBeGreaterThan(0);
   });
 
   test('the visible stack caps at 10 floors and the keyboard never shifts', async ({ context }) => {

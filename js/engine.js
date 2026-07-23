@@ -18,6 +18,7 @@ import { matchesConstraint, genConstraint, wordPoints } from './tower.js';
 import { obf, deobf, now } from './util.js';
 
 const SET_TIMEOUT_MS = 75000; // FRIEND: setter stalls -> rotate onward
+const TOWER_DIFFICULTIES = ['easy', 'medium', 'hard', 'ramp'];
 
 export class Engine {
   constructor(net, code, host) {
@@ -106,6 +107,12 @@ export class Engine {
   setSettings(patch) {
     if (this.started) return;
     Object.assign(this.settings, patch);
+    // TOWER has no use for 'standard' (a Classic/Royale word-tier concept) -
+    // default it to RAMP the moment the room settles into tower mode with
+    // nothing meaningful chosen yet, so a difficulty is always active.
+    if (this.settings.mode === 'tower' && this.settings.difficulty === 'standard') {
+      this.settings.difficulty = 'ramp';
+    }
     this.broadcastLobby();
   }
 
@@ -318,13 +325,16 @@ export class Engine {
       used: new Set(),
       lives: Object.fromEntries(this.activePlayers().map((p) => [p.id, TOWER.lives])),
       revives: {},              // reviverPid -> {target, word, rows:[{word,colors}]}
-      // host-set 2-10 in the lobby (UI-clamped, not server-enforced - tests
+      // host-set 3/5/10 in the lobby (UI-clamped, not server-enforced - tests
       // intentionally pass values outside that range to freeze a stage).
       rampWords: this.settings.rampWords ?? TOWER.defaultRampWords,
       hungerMs: this.settings.hungerMs ?? TOWER.hungerMs,
+      // 'standard' (the global default, meaningless for TOWER) falls back to
+      // 'ramp' - the classic escalating experience.
+      difficulty: TOWER_DIFFICULTIES.includes(this.settings.difficulty) ? this.settings.difficulty : 'ramp',
       constraint: null,
     };
-    this.tower.constraint = genConstraint(1, this.tower.used);
+    this.tower.constraint = genConstraint(1, this.tower.used, this.tower.difficulty, this.tower.rampWords);
     this.broadcastTower();
     this.armHunger();
   }
@@ -453,7 +463,7 @@ export class Engine {
     if (t.wordsInStage >= t.rampWords) {
       t.stage += 1;
       t.wordsInStage = 0;
-      t.constraint = genConstraint(t.stage, t.used);
+      t.constraint = genConstraint(t.stage, t.used, t.difficulty, t.rampWords);
       this.broadcastTower();
     }
   }

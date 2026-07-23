@@ -182,14 +182,6 @@ export class UI {
     $('btn-resume').onclick = () => this.setPaused(false);
     $('btn-picker-cancel').onclick = () => this.closePicker();
     $('stake-range').addEventListener('input', (e) => { $('stake-out').textContent = e.target.value; });
-    // live readout on every drag tick; only push the real setting (and its
-    // lobby broadcast) once the host releases the slider
-    $('ramp-range').addEventListener('input', (e) => { $('ramp-out').textContent = e.target.value; });
-    $('ramp-range').addEventListener('change', (e) => {
-      if (!this.mirror || !this.mirror.isHost()) return;
-      this.a.setSettings({ rampWords: Number(e.target.value) });
-      sfx.key();
-    });
 
     document.addEventListener('keydown', (e) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -338,24 +330,16 @@ export class UI {
     }
     $('set-ante').classList.toggle('hidden', s.mode !== 'royale');
     $('set-words').classList.toggle('hidden', s.mode === 'royale' || s.mode === 'tower');
-    $('set-diff').classList.toggle('hidden', s.mode === 'friend' || s.mode === 'tower'); // FRIEND is human-made; TOWER has its own DECREE knob
+    $('set-diff').classList.toggle('hidden', s.mode === 'friend'); // FRIEND is human-made; TOWER reuses this row for decree difficulty
+    $('diff-standard').classList.toggle('hidden', s.mode === 'tower'); // STD has no meaning for decrees
     $('words-one').classList.toggle('hidden', s.mode !== 'friend'); // 1-each is a FRIEND thing
     $('set-timer').classList.toggle('hidden', s.mode === 'tower'); // the tower has hunger instead
     $('set-ramp').classList.toggle('hidden', s.mode !== 'tower');
-    if (s.mode === 'tower') {
-      const rampRange = $('ramp-range');
-      rampRange.disabled = !m.isHost();
-      // don't clobber the value mid-drag on a live-typing host
-      if (document.activeElement !== rampRange) {
-        rampRange.value = s.rampWords;
-        $('ramp-out').textContent = s.rampWords;
-      }
-    }
     $('mode-blurb').textContent = {
       classic: 'same word, everyone races — most points after all words wins',
       royale: 'endless words, ante into the pot, hit 0 = out. last standing wins',
       friend: `take turns setting secret words — ${s.words} each. stump people to score`,
-      tower: 'CO-OP: stack real words under the decree. misses cost lives. solo ok! (lower DECREE = easier)',
+      tower: 'CO-OP: stack real words under the decree. misses cost lives. solo ok!',
     }[s.mode] || '';
     const minP = s.mode === 'tower' ? 1 : 2;
     const enough = m.players.filter((p) => p.connected).length >= minP;

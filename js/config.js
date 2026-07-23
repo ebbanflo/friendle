@@ -57,21 +57,23 @@ export const TOWER = {
   reviveCost: 5000,
   reviveLives: 2,          // a revived teammate comes back with 2
   // Words needed per decree before it escalates - host-set directly (see
-  // RAMP_WORDS_MIN/MAX below), NOT tied to an easy/medium/hard label.
+  // TOWER_DECREE_CHOICES below), independent of the DIFFICULTY setting.
   // Counterintuitively, a LOW count plays easier: the team cycles to a
   // fresh (often gentler) constraint before their collective vocabulary for
   // any one decree runs dry; a HIGH count forces them to keep finding
-  // distinct words under the SAME brutal constraint until they're stuck.
+  // distinct words under the SAME constraint until they're stuck.
   defaultRampWords: 5,
   hungerMs: 35000,         // silence = everyone bleeds (flat, not difficulty-tied)
   base: 500,               // per-word base, before letter values and stage
   perLetterValue: 50,      // * scrabble-ish letter value
   comboPct: 0.1,           // * combo count, multiplicative
-  minWordsPerDecree: 4,    // a decree must leave at least this many words possible
+  minWordsPerDecree: 4,    // decree floor before rampWords is factored in (see tower.js genConstraint)
   heartEveryHeight: 10,    // team-wide bonus heart every N floors climbed
 };
-export const RAMP_WORDS_MIN = 2;
-export const RAMP_WORDS_MAX = 10;
+// Same three choices as WORDS_CHOICES (below) but a separate constant: this
+// one is words-PER-DECREE (TOWER pacing), an unrelated setting from words
+// count in Classic/FRIEND, even though the numbers happen to match.
+export const TOWER_DECREE_CHOICES = [3, 5, 10];
 export const LETTER_VALUES = {
   a: 1, e: 1, i: 1, o: 1, u: 1, l: 1, n: 1, s: 1, t: 1, r: 1,
   d: 2, g: 2, b: 3, c: 3, m: 3, p: 3, f: 4, h: 4, v: 4, w: 4, y: 4,

@@ -144,32 +144,49 @@ clients apply the score DELTA locally - lean protocol), `twrmiss` (life
 lost), `twrhunger` (silence bled everyone), `twrrev` (revive minigame
 start/row/end - letters are public, it's co-op), `twrbonus` (team-wide heart:
 `reason` is `'milestone'` or `'spelled'`). Rules live in `js/tower.js` (pure,
-node-importable, unit-tested): decree generation walks 8 escalation tiers
-then piles on bans; every generated decree is verified to leave at least
-`minWordsPerDecree` unused dictionary words. Tower submissions are NOT
-pre-validated client-side - pressing enter on a bad word is how lives are
-lost, by design (only the revive wordle gets the friendly local dictionary
-check). Scoring is deliberately RPG-huge (`wordPoints`: base + letter
-values, x stage, x combo).
+node-importable, unit-tested). Tower submissions are NOT pre-validated
+client-side - pressing enter on a bad word is how lives are lost, by design
+(only the revive wordle gets the friendly local dictionary check). Scoring
+is deliberately RPG-huge (`wordPoints`: base + letter values, x stage, x
+combo).
 
-**DECREE pacing is a direct host setting, not a difficulty label.**
-`settings.rampWords` (default `TOWER.defaultRampWords` = 5) is words-per-
-decree, host-adjustable 2-10 via a lobby `<input type="range">`
-(`#ramp-range`/`#ramp-out`, wired in `ui.js wireGameChrome()` - `input`
-updates the live readout only, `change` fires `setSettings` once the drag
-ends, to avoid flooding the lobby broadcast on every drag tick). It is
-**not** clamped server-side - the UI restricts normal hosts to 2-10, but
-tests intentionally pass values like `999` to freeze a stage or `2` to force
-rapid escalation, and `initTower()` accepts whatever `settings.rampWords`
-holds. Counterintuitively LOWER plays easier (confirmed by playtesting, not
-just theory): a small count cycles to a fresh, often-gentler constraint
-before the team's vocabulary for the current one is tapped out; a high count
-forces them to keep finding NEW distinct words under the SAME constraint
-until they run dry. `TOWER.hungerMs` is now a flat constant (not difficulty-
-keyed) - `settings.hungerMs` remains a separate debug-only override used by
-tests. `settings.difficulty` (the shared Classic/Royale enum) has no effect
-on TOWER at all; the lobby hides `#set-diff` and shows `#set-ramp` instead
-when `mode === 'tower'`.
+**Decree generation is three hand-vetted difficulty pools, not an endless
+escalation ladder.** `js/tower.js` exports `EASY`/`MEDIUM`/`HARD` arrays of
+generator functions (each returns a constraint: `req`/`reqAt`/`ban` plus the
+newer predicates `rep` (needs a double letter), `uniq` (no repeats),
+`vmin`/`vmax` (vowel-count bounds), `bookend` (first letter === last), and
+`dvowel` (two vowels adjacent somewhere)). `genConstraint(stage, used,
+difficulty, rampWords)` picks a pool by `difficulty` directly for
+`'easy'`/`'medium'`/`'hard'`, or by `stage` for `'ramp'` (<=2 easy, <=5
+medium, else hard - and it STAYS in hard, rotating through its varied
+generators, instead of piling on more bans forever). Every candidate is
+verified via `countPossible(c, used) >= minWords` before being accepted
+(40 retries, then a pool downgrade as a last resort) where `minWords` is
+`Math.max(poolFloor, rampWords)` - the `rampWords` term is load-bearing: a
+decree that can't mathematically supply that many distinct legal words
+would strand the team permanently on it, which is exactly the bug this
+replaced (the old tier-8+ "no vowels, then keep banning consonants" ladder
+could shrink its own ~57-word no-vowel pool below what a long game needed).
+If you add a new predicate, update `matchesConstraint` AND `describeConstraint`
+together, and re-run the empirical vetting (sample many random instances of
+the new generator against `GUESSES`, confirm a healthy worst-case count)
+before trusting it into a pool - see the "decree difficulty pools" test in
+`tests/tower.spec.js` for the shape of that check.
+
+**DECREE (words-per-decree) and LEVEL (decree difficulty) are two
+independent host settings**, both plain lobby seg-button rows reusing the
+generic `.seg`/`data-setting` wiring already in `ui.js` (no bespoke JS
+needed). `settings.rampWords` (default `TOWER.defaultRampWords` = 5, choices
+3/5/10 via `#set-ramp`) is words-per-decree pacing. `settings.difficulty`
+(the shared Classic/Royale enum, `#set-diff`) doubles as TOWER's decree
+difficulty - `'standard'` (the meaningless-for-tower global default) is
+auto-upgraded to `'ramp'` inside `engine.setSettings()` the moment
+`mode === 'tower'`, and the LEVEL row hides its STD button in tower mode
+(`#diff-standard`) so nothing shows as unselected. Neither setting is
+clamped server-side - `initTower()` accepts whatever `settings.rampWords`/
+`settings.difficulty` hold, and tests intentionally pass values like `999`
+to freeze a stage. `TOWER.hungerMs` remains a flat constant (not
+difficulty-keyed) - `settings.hungerMs` is a separate debug-only override.
 
 **Visible stack is a fixed-size window, not the full tower.** The engine
 keeps every floor (`tower.rows`, capped at 60 for memory, `.slice(-40)` on
@@ -209,6 +226,33 @@ un-pause a clock that's supposed to stay frozen. Client mirrors the same
 guard (`onTower`/`onTowerWord` skip touching `hungerAt` while
 `tower.hungerPaused`), because a stage-change broadcast can land mid-revive
 too.
+
+**Mobile: the revive board REPLACES the tower stack, never adds to it.**
+`ui.js renderRevive()` hides `#tower-stack` and shows `#revive-box` (or vice
+versa) whenever any revive starts/ends; both are fixed at the identical
+`19rem` CSS height so the swap causes zero layout shift. `#tower-input`
+(the current-guess row) is NEVER hidden - `renderTowerInput()` blanks its
+tile text for the active reviewer instead (their typing already renders
+live inside the revive board) because hiding it would shrink the panel and
+move the keyboard, the exact class of bug this was built to avoid. The
+`#hunger-label` ("REVIVING — TIMER PAUSED") toggles via a `visibility`-based
+`.inactive` class, not `display:none`, for the same reason: its space in
+`.tower-hud` must stay reserved even when hidden, or a revive starting would
+shift everything below it by one text line. `.tower-row` needs an explicit
+`justify-content: center` - `.tower-stack` is `width: 100%` (so an empty
+stack doesn't collapse to zero width under `.game-panel`'s
+`align-items: center`), which stretches each row to full width and left-
+justifies its content by default.
+
+**iOS PWA: `#scr-game` needs BOTH safe-area insets, not just the bottom
+one.** `apple-mobile-web-app-status-bar-style: black-translucent` (set for
+the home-screen icon) makes standalone iOS render edge-to-edge under the
+notch/status bar. Without `env(safe-area-inset-top)` in `#scr-game`'s
+padding, the header (`#btn-pause`/`#btn-help`/`#btn-quit` - shared by every
+mode) sits partly under the status bar and becomes untappable. Headless
+Chromium always resolves that env() to 0, so this can't be reproduced
+directly in Playwright - the regression test locks in the CSS rule's
+existence textually instead of the real geometry.
 
 ## Known traps (each one bit us or will bite you)
 
