@@ -3,10 +3,12 @@
 // judges; clients only render what they're told.
 
 import { GUESSES } from '../data/guesses.js';
-import { TOWER, LETTER_VALUES } from './config.js';
+import { SOLUTIONS } from '../data/solutions.js';
+import { TOWER, LETTER_VALUES, WORD_LEN } from './config.js';
 
 const VOWELS = ['a', 'e', 'i', 'o', 'u'];
 const COMMON = 'etaoinshrdlcumwfgypb'; // top ~20 by in-dictionary frequency
+const CONS = 'tnshrdlcmwfgpb';         // common consonants (COMMON minus vowels)
 const RARE = 'jqxzvk';                 // reserved for HARD - never in COMMON
 const rand = (n) => Math.floor(Math.random() * n);
 const pickFrom = (s) => s[rand(s.length)];
@@ -49,6 +51,21 @@ export function countPossible(c, used) {
   return n;
 }
 
+// Recognizability floor: a decree must be satisfiable by at least `floor` words
+// from the curated SOLUTIONS bank ("answers people actually know"), not merely
+// the full 14.8k guess dictionary. A decree only clearable via lymph / pshaw /
+// tsars is technically survivable but feels broken to a human - this rejects
+// those shapes at generation time. Early-exits the moment the floor is met, so
+// it's cheap for the common (word-rich) case. Static by design: it judges the
+// decree's SHAPE, independent of which words a game has already used.
+export function countRecognizable(c, floor = Infinity) {
+  let n = 0;
+  for (const w of SOLUTIONS) {
+    if (matchesConstraint(w, c) && ++n >= floor) return n;
+  }
+  return n;
+}
+
 // Three hand-vetted difficulty pools (see tools/vet-decrees.mjs-style checks
 // run against the real 14.8k-word GUESSES bank before these were tuned -
 // every generator here reliably clears its pool's minWords floor below).
@@ -76,17 +93,21 @@ const MEDIUM = [
 ];
 
 // HARD: brutal but never JUST "no vowels, minus more letters" - a rotating
-// mix of structural, letter-count, and rare-letter twists. countPossible
-// keeps every one of these honest at runtime (see genConstraint).
+// mix of structural, letter-count, and rare-letter twists. Each generator was
+// vetted against the recognizable SOLUTIONS bank (not just the full GUESSES
+// dictionary): the ones that only survived on obscure words nobody knows
+// (no-vowels+no-repeats -> lymph/glyph/sylph; bookend+slot -> raser/losel)
+// were cut. What's left challenges a word buff with words they'll actually
+// recognize. countPossible keeps every one honest at runtime (genConstraint).
 const HARD = [
-  () => ({ bookend: true }),                                       // first == last letter
-  () => ({ req: [pickFrom(RARE)] }),                                // a genuinely rare letter
-  () => ({ ban: [...VOWELS] }),                                     // no vowels at all
-  () => ({ ban: [...VOWELS, pickFrom('bcdfgkmpw')] }),              // no vowels + ONE extra ban (capped, not stacking)
-  () => ({ ban: [...VOWELS], uniq: true }),                         // no vowels, no repeats either
-  () => ({ vmin: 1, vmax: 1, reqAt: [{ i: rand(5), ch: pickFrom(COMMON.slice(0, 14)) }] }),
-  () => ({ bookend: true, reqAt: [{ i: 1 + rand(3), ch: pickFrom(COMMON.slice(0, 16)) }] }),
-  () => ({ req: uniqArr([pickFrom(COMMON.slice(0, 16)), pickFrom(COMMON.slice(0, 16)), pickFrom(COMMON.slice(0, 16))]) }),
+  () => ({ bookend: true }),                                       // first letter == last letter
+  () => ({ req: [pickFrom(RARE)] }),                                // a genuinely rare letter (J/Q/X/Z/V/K)
+  () => ({ ban: [...VOWELS] }),                                     // NO VOWELS - the one spicy "dredge up crypt/nymph" decree
+  () => ({ ban: [pickFrom('eao')] }),                              // ban a common vowel: NO E / NO A / NO O (Gadsby-style)
+  () => ({ reqAt: [{ i: 4, ch: pickFrom('tdkyh') }] }),           // ENDS IN T/D/K/Y/H
+  () => ({ vmin: 1, vmax: 1, reqAt: [{ i: 1 + rand(3), ch: pickFrom(CONS) }] }), // exactly 1 vowel + an interior consonant pinned
+  () => ({ rep: true, vmin: 1, vmax: 1 }),                         // a double letter AND exactly one vowel
+  () => ({ req: uniqArr([pickFrom(VOWELS), pickFrom(CONS), pickFrom(CONS)]) }), // 3 required letters, but at least one vowel keeps it human
 ];
 
 function poolFor(difficulty, stage) {
@@ -113,9 +134,14 @@ export function genConstraint(stage, used, difficulty = 'ramp', rampWords = 1) {
     : pool === MEDIUM ? TOWER.minWordsPerDecree * 10
       : TOWER.minWordsPerDecree * 40;
   const minWords = Math.max(poolFloor, rampWords);
+  // Two independent gates: `minWords` (over the fresh, unused guess pool - can
+  // the team still clear it) AND `recogFloor` (over the static SOLUTIONS bank -
+  // is it satisfiable by real, recognizable words). HARD keeps the recog floor
+  // modest so its spice survives; easy/medium set it high but always clear it.
+  const recogFloor = pool === HARD ? 25 : pool === MEDIUM ? 40 : 100;
   for (let tries = 0; tries < 40; tries++) {
     const c = pool[rand(pool.length)]();
-    if (countPossible(c, used) >= minWords) return c;
+    if (countPossible(c, used) >= minWords && countRecognizable(c, recogFloor) >= recogFloor) return c;
   }
   // this pool is exhausted this deep into a long game (rare) - drop a notch
   // rather than serve something the team can no longer possibly satisfy
@@ -126,7 +152,14 @@ export function genConstraint(stage, used, difficulty = 'ramp', rampWords = 1) {
 
 export function describeConstraint(c) {
   const parts = [];
-  if (c.reqAt?.length) parts.push(c.reqAt.map(({ i, ch }) => `${ch.toUpperCase()} IN SLOT ${i + 1}`).join(' + '));
+  if (c.reqAt?.length) {
+    parts.push(c.reqAt.map(({ i, ch }) => {
+      const L = ch.toUpperCase();
+      if (i === 0) return `STARTS WITH ${L}`;
+      if (i === WORD_LEN - 1) return `ENDS IN ${L}`;
+      return `${L} IN SLOT ${i + 1}`;
+    }).join(' + '));
+  }
   if (c.req?.length) parts.push(`MUST USE ${c.req.map((x) => x.toUpperCase()).join(' + ')}`);
   if (c.ban?.length) {
     const isNoVowels = VOWELS.every((v) => c.ban.includes(v));

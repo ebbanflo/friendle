@@ -375,6 +375,21 @@ export class Engine {
     return this.activePlayers().every((p) => (this.tower.lives[p.id] ?? 0) <= 0);
   }
 
+  // A word only counts as a duplicate while it's STILL visible in the tower
+  // (the newest TOWER.visibleRows floors - what ui.js actually renders). Once
+  // a floor scrolls past that window it's forgotten, so an early word can be
+  // played again later. t.used keeps every word ever placed, but only to feed
+  // genConstraint's survivability check - it is NOT the duplicate gate.
+  towerOnScreen(word) {
+    const t = this.tower;
+    if (!t) return false;
+    const start = Math.max(0, t.rows.length - TOWER.visibleRows);
+    for (let i = start; i < t.rows.length; i++) {
+      if (t.rows[i].word === word) return true;
+    }
+    return false;
+  }
+
   // Team-wide bonus heart (milestone every N floors, or the TOWER easter
   // egg). Revives anyone currently downed - "everyone gets a heart" is
   // literal, including whoever's at zero.
@@ -434,7 +449,7 @@ export class Engine {
     if ((t.lives[from] ?? 0) <= 0) return; // downed players watch
 
     if (!isValidGuess(word)) return this.towerMiss(from, word, 'not a word');
-    if (t.used.has(word)) return this.towerMiss(from, word, 'already in the tower');
+    if (this.towerOnScreen(word)) return this.towerMiss(from, word, 'already in the tower');
     if (!matchesConstraint(word, t.constraint)) return this.towerMiss(from, word, 'breaks the decree');
 
     // accepted: the tower grows

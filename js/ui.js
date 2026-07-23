@@ -9,10 +9,11 @@ import { sfx, soundEnabled, setSound } from './audio.js';
 
 const $ = (id) => document.getElementById(id);
 const KEY_ROWS = ['qwertyuiop', 'asdfghjkl', '⏎zxcvbnm⌫'];
-// TOWER: how many floors stay on screen at once. Must match the fixed
+// TOWER: how many floors stay on screen at once (shared source of truth in
+// config, also used by the engine's duplicate-word rule). Must match the fixed
 // height baked into .tower-stack in style.css, or the stack's footprint
 // (and everything below it, including the keyboard) will shift as it fills.
-const TOWER_VISIBLE_ROWS = 10;
+const TOWER_VISIBLE_ROWS = TOWER.visibleRows;
 
 export class UI {
   // actions: {host(), join(code), start(), setSettings(patch), playAgain(), quitToMenu()}

@@ -159,19 +159,36 @@ newer predicates `rep` (needs a double letter), `uniq` (no repeats),
 difficulty, rampWords)` picks a pool by `difficulty` directly for
 `'easy'`/`'medium'`/`'hard'`, or by `stage` for `'ramp'` (<=2 easy, <=5
 medium, else hard - and it STAYS in hard, rotating through its varied
-generators, instead of piling on more bans forever). Every candidate is
-verified via `countPossible(c, used) >= minWords` before being accepted
-(40 retries, then a pool downgrade as a last resort) where `minWords` is
-`Math.max(poolFloor, rampWords)` - the `rampWords` term is load-bearing: a
-decree that can't mathematically supply that many distinct legal words
-would strand the team permanently on it, which is exactly the bug this
-replaced (the old tier-8+ "no vowels, then keep banning consonants" ladder
-could shrink its own ~57-word no-vowel pool below what a long game needed).
-If you add a new predicate, update `matchesConstraint` AND `describeConstraint`
-together, and re-run the empirical vetting (sample many random instances of
-the new generator against `GUESSES`, confirm a healthy worst-case count)
-before trusting it into a pool - see the "decree difficulty pools" test in
-`tests/tower.spec.js` for the shape of that check.
+generators, instead of piling on more bans forever). Every candidate passes
+TWO independent gates before being accepted (40 retries, then a pool
+downgrade as a last resort):
+
+1. `countPossible(c, used) >= minWords` (over the fresh, unused GUESSES pool)
+   where `minWords = Math.max(poolFloor, rampWords)` - the `rampWords` term is
+   load-bearing: a decree that can't mathematically supply that many distinct
+   legal words would strand the team permanently.
+2. `countRecognizable(c, recogFloor) >= recogFloor` (over the static SOLUTIONS
+   bank - the curated "answers people know", ~13k of the 14.8k guesses).
+   HARD's floor is 25, easy/medium higher. This is what stops a "hard" decree
+   that's technically survivable but only via obscure scraps (`lymph`,
+   `pshaw`, `tsars`, `raser`) - the exact "some decrees didn't work / barely
+   recognizable words, not fun" report. `countRecognizable` early-exits once
+   the floor is met, so it's cheap for word-rich decrees.
+
+The HARD pool was rebuilt around this: the old obscure-forcers (no-vowels +
+no-repeats -> 23 words; bookend + a slotted letter -> ~17 near-non-words)
+were cut in favor of recognizable-but-hard twists - ban a common vowel (NO
+E/A/O, Gadsby-style), ENDS IN a letter, a double letter + exactly one vowel,
+a rare required letter, exactly-one-vowel + a pinned interior consonant, a
+3-required-letters decree that always includes a vowel. Plain NO VOWELS
+stays as the single "spicy, dredge up crypt/nymph" option (~1/8 of hard
+decrees). If you add a new predicate, update `matchesConstraint` AND
+`describeConstraint` together, and re-run the empirical vetting against
+BOTH `GUESSES` (survivability) and `SOLUTIONS` (recognizability) - see the
+"decree difficulty pools" test in `tests/tower.spec.js`, which now asserts
+every sampled decree clears `countRecognizable >= 20`. `describeConstraint`
+renders slot-1 reqAt as `STARTS WITH x` and slot-5 as `ENDS IN x` for
+readability.
 
 **DECREE (words-per-decree) and LEVEL (decree difficulty) are two
 independent host settings**, both plain lobby seg-button rows reusing the
@@ -190,14 +207,26 @@ difficulty-keyed) - `settings.hungerMs` is a separate debug-only override.
 
 **Visible stack is a fixed-size window, not the full tower.** The engine
 keeps every floor (`tower.rows`, capped at 60 for memory, `.slice(-40)` on
-resync) - height/scoring are never affected. `ui.js renderTowerStack()` only
-renders the newest `TOWER_VISIBLE_ROWS` (10), and `.tower-stack` in
-style.css is a fixed `height` (not `min-height`) sized for exactly that many
-rows. Both together are what make the keyboard immovable: fixed DOM height +
-fixed row count means the stack's footprint never changes from the first
-floor onward, instead of growing until it hits a cap. If you ever change
-TOWER_VISIBLE_ROWS, update the CSS height in lockstep (10 rows = 10 *
-1.7rem tiles + 9 * .22rem gaps = 19rem) or the keyboard will drift again.
+resync) - height/scoring are never affected. The window size lives in config
+as `TOWER.visibleRows` (10), the single source of truth shared by three
+places that must agree: `ui.js renderTowerStack()` renders the newest
+`TOWER.visibleRows`; `.tower-stack` in style.css is a fixed `height` (not
+`min-height`) sized for exactly that many rows; and the engine's
+duplicate-word rule (below) uses the same window. If you ever change it,
+update the CSS height in lockstep (10 rows = 10 * 1.7rem tiles + 9 * .22rem
+gaps = 19rem) or the keyboard will drift again. Fixed DOM height + fixed row
+count is what makes the keyboard immovable from the first floor onward.
+
+**Duplicate-word rule is ON-SCREEN only.** `engine.towerOnScreen(word)`
+checks just the newest `TOWER.visibleRows` floors, NOT all history: a word
+that has scrolled past the visible window becomes playable again (climb 10+
+new floors and your opening word is fair game). `tower.used` still
+accumulates every word ever placed, but purely to feed `genConstraint`'s
+survivability check - it is deliberately NOT the duplicate gate. (Using the
+full history there would keep excluding words the player can no longer even
+see, which is what the "buggy was rejected 10 floors later" report was
+about.) Guests never duplicate-check (host-authoritative), so this is a
+one-file rule; the client just renders the resulting miss toast.
 
 **Bonus hearts.** `engine.grantHearts(reason)` adds one life to every active
 player, capped at `TOWER.maxLives` (5) - including anyone currently at 0,

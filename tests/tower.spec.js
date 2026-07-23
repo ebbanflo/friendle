@@ -2,7 +2,10 @@ import { test, expect } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { GUESSES } from '../data/guesses.js';
-import { matchesConstraint, genConstraint, countPossible, wordPoints } from '../js/tower.js';
+import { SOLUTIONS } from '../data/solutions.js';
+import {
+  matchesConstraint, genConstraint, countPossible, countRecognizable, describeConstraint, wordPoints,
+} from '../js/tower.js';
 import {
   openPage, hostGame, joinGame, startGame, state, engineState, setScore, buy, FAST,
 } from './helpers.js';
@@ -399,7 +402,7 @@ test.describe('tower mode', () => {
     await host.waitForFunction(() => window.__friendle.state().tower.stage === 2, null, { polling: 100 });
   });
 
-  test('decree difficulty pools: easy/medium/hard/ramp are all survivable over a long game, and hard is more than just no-vowels', () => {
+  test('decree difficulty pools: all survivable over a long game, and every decree is clearable with RECOGNIZABLE words (not obscure scraps)', () => {
     for (const difficulty of ['easy', 'medium', 'hard', 'ramp']) {
       const used = new Set();
       const seen = new Set();
@@ -408,6 +411,13 @@ test.describe('tower mode', () => {
         // every decree this deep in a long game can still supply the full
         // 10-word requirement - nobody gets mathematically stranded
         expect(countPossible(c, used)).toBeGreaterThanOrEqual(10);
+        // ...and it's satisfiable by real, recognizable answer words, not just
+        // technically-possible obscure ones (lymph / pshaw / raser). This is
+        // THE regression guard for the "some decrees didn't work" report.
+        expect(countRecognizable(c)).toBeGreaterThanOrEqual(
+          20,
+          `${difficulty} decree "${describeConstraint(c)}" has too few recognizable answers`,
+        );
         seen.add(JSON.stringify(c));
         // consume some of its pool, like a real game would
         let taken = 0;
@@ -418,11 +428,14 @@ test.describe('tower mode', () => {
       }
       expect(seen.size).toBeGreaterThan(5); // real variety, not one repeated decree
     }
-    // hard mode specifically must not be exclusively vowel-banning
-    const used = new Set();
+    // hard mode specifically must not be exclusively vowel-banning: over many
+    // hard decrees, plenty are structural / letter-count / rare-letter twists
     let nonVowelHard = 0;
-    for (let stage = 6; stage <= 60; stage++) {
+    let total = 0;
+    const used = new Set();
+    for (let stage = 6; stage <= 80; stage++) {
       const c = genConstraint(stage, used, 'hard', 5);
+      total += 1;
       if (!(c.ban && ['a', 'e', 'i', 'o', 'u'].every((v) => c.ban.includes(v)))) nonVowelHard += 1;
       let taken = 0;
       for (const w of GUESSES) {
@@ -430,7 +443,23 @@ test.describe('tower mode', () => {
         if (!used.has(w) && matchesConstraint(w, c)) { used.add(w); taken += 1; }
       }
     }
-    expect(nonVowelHard).toBeGreaterThan(0);
+    expect(nonVowelHard).toBeGreaterThan(total * 0.6); // the large majority are NOT no-vowels
+
+    // countRecognizable early-exits at its floor: a rich decree reports >= floor,
+    // a thin one reports its true (small) count
+    expect(countRecognizable({ req: ['e'] }, 20)).toBe(20); // capped by early-exit
+    expect(countRecognizable({ ban: ['a', 'e', 'i', 'o', 'u'], uniq: true })).toBeLessThan(30); // the obscure shape we cut
+  });
+
+  test('describeConstraint reads naturally: starts-with / ends-in / vowel counts', () => {
+    expect(describeConstraint({ reqAt: [{ i: 0, ch: 's' }] })).toBe('STARTS WITH S');
+    expect(describeConstraint({ reqAt: [{ i: 4, ch: 't' }] })).toBe('ENDS IN T');
+    expect(describeConstraint({ reqAt: [{ i: 2, ch: 'a' }] })).toBe('A IN SLOT 3');
+    expect(describeConstraint({ vmin: 1, vmax: 1 })).toBe('EXACTLY 1 VOWEL');
+    expect(describeConstraint({ vmin: 3 })).toBe('3+ VOWELS');
+    expect(describeConstraint({ bookend: true })).toBe('FIRST + LAST LETTER MATCH');
+    expect(describeConstraint({ ban: ['e'] })).toBe('FORBIDDEN: E');
+    expect(describeConstraint({})).toBe('ANY WORD');
   });
 
   test('the visible stack caps at 10 floors and the keyboard never shifts', async ({ context }) => {
@@ -463,6 +492,47 @@ test.describe('tower mode', () => {
     for (let i = 0; i < 10; i++) expect(await cellsOf(rows.nth(i))).not.toBe(words[0]);
     // but it's still real height/score, just not rendered
     expect((await towerState(host)).height).toBe(14);
+  });
+
+  test('duplicate rule is on-screen only: a word that scrolled off can be replayed, one still visible cannot', async ({ context }) => {
+    test.setTimeout(60000);
+    const host = await openPage(context);
+    await hostGame(host, 'REPLAY', {
+      ...FAST, mode: 'tower', rampWords: 999, hungerMs: 600000,
+    });
+    await host.click('#btn-start');
+    await host.waitForFunction(() => !!window.__friendle.state().tower, null, { polling: 100 });
+    await host.evaluate(() => { window.__friendle.engine.tower.constraint = {}; });
+
+    const words = GUESSES.filter((w) => /^[a-z]{5}$/.test(w)).slice(0, 30);
+    const first = words[0];
+    await climb(host, first);           // floor 1 = `first`, now on screen
+
+    // a word still on screen can't be replayed
+    await miss(host, first);
+    expect((await towerState(host)).height).toBe(1); // rejected, no growth
+
+    // climb 10 MORE distinct words - `first` scrolls out of the 10-row window
+    for (let i = 1; i <= 10; i++) await climb(host, words[i]);
+    let t = await towerState(host);
+    expect(t.height).toBe(11);
+    // it's gone from the visible window (newest 10 are words[1..10])...
+    const onScreen = t.rows.slice(-10).map((r) => r.word);
+    expect(onScreen).not.toContain(first);
+    // ...and the engine agrees it's replayable now
+    expect(await host.evaluate((w) => window.__friendle.engine.towerOnScreen(w), first)).toBe(false);
+
+    // so `first` is accepted again - the tower grows, no life lost
+    const livesBefore = (await towerState(host)).lives[await host.evaluate(() => window.__friendle.selfId)];
+    await climb(host, first);
+    t = await towerState(host);
+    expect(t.height).toBe(12);
+    expect(t.rows[t.rows.length - 1].word).toBe(first); // it's the newest floor
+    expect(t.lives[await host.evaluate(() => window.__friendle.selfId)]).toBe(livesBefore); // no penalty
+
+    // and now that it's back on screen, it's a duplicate again
+    await miss(host, first);
+    expect((await towerState(host)).height).toBe(12);
   });
 
   test('pause works in tower mode (regression: header needs top safe-area padding)', async ({ context }) => {

@@ -59,13 +59,17 @@ independent settings shape it: **LEVEL** (EASY / MED / HARD / RAMP) picks the
 decree's difficulty — EASY/MED/HARD hold steady all game, RAMP starts easy
 and climbs to hard, then stays there instead of spiraling into oblivion.
 HARD isn't just "no vowels" on repeat, either — expect rare letters, words
-where the first and last letter match, exact vowel counts, and other twists
-alongside the classic letter-bans, all rotating for variety. **DECREE** is
-the separate pacing knob — 3, 5, or 10 words before the decree changes.
+where the first and last letter match, exact vowel counts, "no E", "ends in
+K", double letters, and other twists alongside the classic letter-bans, all
+rotating for variety. Every decree is vetted to be clearable with words
+people actually recognize — no dead-ends built from dictionary scraps.
+**DECREE** is the separate pacing knob — 3, 5, or 10 words before the decree
+changes.
 
-Everyone has **3 lives**. A submission that isn't a real word, repeats the
-tower, or breaks the decree costs one — and so does silence: leave the
-hunger bar to empty and *everyone* bleeds. Lose them all and you're down,
+Everyone has **3 lives**. A submission that isn't a real word, repeats a word
+*still on screen* in the tower, or breaks the decree costs one — and so does
+silence: leave the hunger bar to empty and *everyone* bleeds. (A word that's
+scrolled off the visible stack is fair to play again.) Lose them all and you're down,
 until a teammate spends points on ✨ **Revive** — a classic solo Wordle where
 solving brings you back with 2 lives. **Reviving stops the clock**: the
 hunger bar freezes (blue, "⏸ REVIVING — TIMER PAUSED") the moment anyone

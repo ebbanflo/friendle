@@ -69,6 +69,12 @@ export const TOWER = {
   comboPct: 0.1,           // * combo count, multiplicative
   minWordsPerDecree: 4,    // decree floor before rampWords is factored in (see tower.js genConstraint)
   heartEveryHeight: 10,    // team-wide bonus heart every N floors climbed
+  // How many of the newest floors are shown on screen at once. Load-bearing
+  // in TWO places kept in sync: ui.js renders the last `visibleRows` (and the
+  // .tower-stack CSS height is sized for exactly this many), AND the engine's
+  // duplicate-word rule only rejects words STILL on screen - a word that has
+  // scrolled past this window becomes playable again.
+  visibleRows: 10,
 };
 // Same three choices as WORDS_CHOICES (below) but a separate constant: this
 // one is words-PER-DECREE (TOWER pacing), an unrelated setting from words
