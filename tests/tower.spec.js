@@ -430,20 +430,26 @@ test.describe('tower mode', () => {
     }
     // hard mode specifically must not be exclusively vowel-banning: over many
     // hard decrees, plenty are structural / letter-count / rare-letter twists
-    let nonVowelHard = 0;
+    let noVowelHard = 0;
     let total = 0;
+    const seenHard = new Set();
     const used = new Set();
-    for (let stage = 6; stage <= 80; stage++) {
+    for (let stage = 6; stage <= 120; stage++) {
       const c = genConstraint(stage, used, 'hard', 5);
       total += 1;
-      if (!(c.ban && ['a', 'e', 'i', 'o', 'u'].every((v) => c.ban.includes(v)))) nonVowelHard += 1;
+      if (c.ban && ['a', 'e', 'i', 'o', 'u'].every((v) => c.ban.includes(v))) noVowelHard += 1;
+      seenHard.add(describeConstraint(c));
       let taken = 0;
       for (const w of GUESSES) {
         if (taken >= 5) break;
         if (!used.has(w) && matchesConstraint(w, c)) { used.add(w); taken += 1; }
       }
     }
-    expect(nonVowelHard).toBeGreaterThan(total * 0.6); // the large majority are NOT no-vowels
+    // no-vowels is still IN the mix, but only as occasional spice - hard never
+    // "defaults" to it, it cycles through many other options (the direct fix
+    // for the "it still defaults to no vowels eventually" report)
+    expect(noVowelHard).toBeLessThan(total * 0.2); // a small minority, not the default
+    expect(seenHard.size).toBeGreaterThan(15);     // genuine variety of hard decrees
 
     // countRecognizable early-exits at its floor: a rich decree reports >= floor,
     // a thin one reports its true (small) count

@@ -177,18 +177,24 @@ downgrade as a last resort):
 
 The HARD pool was rebuilt around this: the old obscure-forcers (no-vowels +
 no-repeats -> 23 words; bookend + a slotted letter -> ~17 near-non-words)
-were cut in favor of recognizable-but-hard twists - ban a common vowel (NO
-E/A/O, Gadsby-style), ENDS IN a letter, a double letter + exactly one vowel,
-a rare required letter, exactly-one-vowel + a pinned interior consonant, a
-3-required-letters decree that always includes a vowel. Plain NO VOWELS
-stays as the single "spicy, dredge up crypt/nymph" option (~1/8 of hard
-decrees). If you add a new predicate, update `matchesConstraint` AND
+were cut in favor of recognizable-but-hard twists. The pool is deliberately
+WIDE (11 generators) so hard keeps cycling rather than converging: STARTS
+WITH / ENDS IN a letter, first==last (optionally + 2 vowels), a rare required
+letter, ban a common vowel (NO E/A/O, Gadsby-style), exactly-one-vowel (+ a
+pinned interior consonant), a double letter (+ exactly one vowel, or + a
+required common letter), a 3-required-letters decree that always includes a
+vowel. Plain NO VOWELS is STILL in the mix but as just one of eleven options,
+and because its whole pool is only ~57 words it also fails the survivability
+floor once a long game has consumed them - so it's occasional spice (~1-4% of
+hard decrees, trending to 0% deep in a game), never the place hard "defaults"
+to. If you add a new predicate, update `matchesConstraint` AND
 `describeConstraint` together, and re-run the empirical vetting against
 BOTH `GUESSES` (survivability) and `SOLUTIONS` (recognizability) - see the
-"decree difficulty pools" test in `tests/tower.spec.js`, which now asserts
-every sampled decree clears `countRecognizable >= 20`. `describeConstraint`
-renders slot-1 reqAt as `STARTS WITH x` and slot-5 as `ENDS IN x` for
-readability.
+"decree difficulty pools" test in `tests/tower.spec.js`, which asserts every
+sampled decree clears `countRecognizable >= 20`, that no-vowels stays under
+20% of hard decrees, and that >15 distinct hard decree shapes appear.
+`describeConstraint` renders slot-1 reqAt as `STARTS WITH x` and slot-5 as
+`ENDS IN x` for readability.
 
 **DECREE (words-per-decree) and LEVEL (decree difficulty) are two
 independent host settings**, both plain lobby seg-button rows reusing the

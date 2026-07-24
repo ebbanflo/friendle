@@ -92,21 +92,26 @@ const MEDIUM = [
   () => ({ vmin: 3 }),                          // 3+ vowels
 ];
 
-// HARD: brutal but never JUST "no vowels, minus more letters" - a rotating
-// mix of structural, letter-count, and rare-letter twists. Each generator was
-// vetted against the recognizable SOLUTIONS bank (not just the full GUESSES
+// HARD: brutal but never JUST "no vowels, minus more letters" - a big, varied
+// rotation of structural, letter-count, and rare-letter twists. Each generator
+// was vetted against the recognizable SOLUTIONS bank (not just the full GUESSES
 // dictionary): the ones that only survived on obscure words nobody knows
 // (no-vowels+no-repeats -> lymph/glyph/sylph; bookend+slot -> raser/losel)
-// were cut. What's left challenges a word buff with words they'll actually
-// recognize. countPossible keeps every one honest at runtime (genConstraint).
+// were cut. NO VOWELS stays but as just ONE of eleven options (~9%), not the
+// place hard converges - the pool is deliberately wide so hard keeps cycling
+// through fresh ideas. countPossible + countRecognizable keep every one honest
+// at runtime (see genConstraint).
 const HARD = [
   () => ({ bookend: true }),                                       // first letter == last letter
-  () => ({ req: [pickFrom(RARE)] }),                                // a genuinely rare letter (J/Q/X/Z/V/K)
-  () => ({ ban: [...VOWELS] }),                                     // NO VOWELS - the one spicy "dredge up crypt/nymph" decree
-  () => ({ ban: [pickFrom('eao')] }),                              // ban a common vowel: NO E / NO A / NO O (Gadsby-style)
+  () => ({ reqAt: [{ i: 0, ch: pickFrom('bcdfgp') }] }),          // STARTS WITH B/C/D/F/G/P
   () => ({ reqAt: [{ i: 4, ch: pickFrom('tdkyh') }] }),           // ENDS IN T/D/K/Y/H
+  () => ({ req: [pickFrom(RARE)] }),                                // a genuinely rare letter (J/Q/X/Z/V/K)
+  () => ({ ban: [...VOWELS] }),                                     // NO VOWELS - the occasional spicy "crypt/nymph" test
+  () => ({ ban: [pickFrom('eao')] }),                              // ban a common vowel: NO E / NO A / NO O (Gadsby-style)
   () => ({ vmin: 1, vmax: 1, reqAt: [{ i: 1 + rand(3), ch: pickFrom(CONS) }] }), // exactly 1 vowel + an interior consonant pinned
   () => ({ rep: true, vmin: 1, vmax: 1 }),                         // a double letter AND exactly one vowel
+  () => ({ rep: true, req: [pickFrom(COMMON.slice(0, 10))] }),     // a double letter AND a required common letter
+  () => ({ bookend: true, vmin: 2 }),                              // first == last AND two-plus vowels
   () => ({ req: uniqArr([pickFrom(VOWELS), pickFrom(CONS), pickFrom(CONS)]) }), // 3 required letters, but at least one vowel keeps it human
 ];
 
