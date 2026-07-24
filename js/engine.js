@@ -478,7 +478,8 @@ export class Engine {
     if (t.wordsInStage >= t.rampWords) {
       t.stage += 1;
       t.wordsInStage = 0;
-      t.constraint = genConstraint(t.stage, t.used, t.difficulty, t.rampWords);
+      // pass the outgoing decree so the new one is never an identical repeat
+      t.constraint = genConstraint(t.stage, t.used, t.difficulty, t.rampWords, t.constraint);
       this.broadcastTower();
     }
   }

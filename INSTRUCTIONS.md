@@ -156,12 +156,12 @@ generator functions (each returns a constraint: `req`/`reqAt`/`ban` plus the
 newer predicates `rep` (needs a double letter), `uniq` (no repeats),
 `vmin`/`vmax` (vowel-count bounds), `bookend` (first letter === last), and
 `dvowel` (two vowels adjacent somewhere)). `genConstraint(stage, used,
-difficulty, rampWords)` picks a pool by `difficulty` directly for
+difficulty, rampWords, prev)` picks a pool by `difficulty` directly for
 `'easy'`/`'medium'`/`'hard'`, or by `stage` for `'ramp'` (<=2 easy, <=5
 medium, else hard - and it STAYS in hard, rotating through its varied
 generators, instead of piling on more bans forever). Every candidate passes
-TWO independent gates before being accepted (40 retries, then a pool
-downgrade as a last resort):
+THREE gates before being accepted (40 retries, then a pool downgrade as a
+last resort):
 
 1. `countPossible(c, used) >= minWords` (over the fresh, unused GUESSES pool)
    where `minWords = Math.max(poolFloor, rampWords)` - the `rampWords` term is
@@ -174,6 +174,13 @@ downgrade as a last resort):
    `pshaw`, `tsars`, `raser`) - the exact "some decrees didn't work / barely
    recognizable words, not fun" report. `countRecognizable` early-exits once
    the floor is met, so it's cheap for word-rich decrees.
+3. `describeConstraint(c) !== describeConstraint(prev)` - a decree is NEVER the
+   same rule as the one it replaces, so hard never sends e.g. "NO VOWELS"
+   (or any rule) two stages running. The engine passes the outgoing
+   `t.constraint` as `prev` at each stage bump; the first decree has no `prev`.
+   This is what makes "NO VOWELS at ~4% overall" also mean "NO VOWELS never
+   back-to-back" - frequency and clustering are separate knobs, and this gate
+   is the clustering one.
 
 The HARD pool was rebuilt around this: the old obscure-forcers (no-vowels +
 no-repeats -> 23 words; bookend + a slotted letter -> ~17 near-non-words)

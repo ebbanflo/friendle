@@ -128,7 +128,7 @@ function poolFor(difficulty, stage) {
   return HARD;
 }
 
-export function genConstraint(stage, used, difficulty = 'ramp', rampWords = 1) {
+export function genConstraint(stage, used, difficulty = 'ramp', rampWords = 1, prev = null) {
   const pool = poolFor(difficulty, stage);
   // A decree must be survivable: enough unused dictionary words must satisfy
   // it. Floor scales with the pool (hard is SUPPOSED to be cruel, easy never
@@ -139,19 +139,23 @@ export function genConstraint(stage, used, difficulty = 'ramp', rampWords = 1) {
     : pool === MEDIUM ? TOWER.minWordsPerDecree * 10
       : TOWER.minWordsPerDecree * 40;
   const minWords = Math.max(poolFloor, rampWords);
-  // Two independent gates: `minWords` (over the fresh, unused guess pool - can
-  // the team still clear it) AND `recogFloor` (over the static SOLUTIONS bank -
-  // is it satisfiable by real, recognizable words). HARD keeps the recog floor
-  // modest so its spice survives; easy/medium set it high but always clear it.
+  // Three gates: `minWords` (over the fresh, unused guess pool - can the team
+  // still clear it), `recogFloor` (over the static SOLUTIONS bank - is it
+  // satisfiable by real, recognizable words), AND it must not be the SAME
+  // decree as the one it's replacing - a decree never repeats back-to-back, so
+  // the tower never feels stuck sending "NO VOWELS" (or any rule) twice running.
+  // HARD keeps the recog floor modest so its spice survives; easy/medium high.
   const recogFloor = pool === HARD ? 25 : pool === MEDIUM ? 40 : 100;
+  const prevDesc = prev ? describeConstraint(prev) : null;
   for (let tries = 0; tries < 40; tries++) {
     const c = pool[rand(pool.length)]();
+    if (describeConstraint(c) === prevDesc) continue; // no immediate repeat
     if (countPossible(c, used) >= minWords && countRecognizable(c, recogFloor) >= recogFloor) return c;
   }
   // this pool is exhausted this deep into a long game (rare) - drop a notch
   // rather than serve something the team can no longer possibly satisfy
-  if (pool === HARD) return genConstraint(stage, used, 'medium', rampWords);
-  if (pool === MEDIUM) return genConstraint(stage, used, 'easy', rampWords);
+  if (pool === HARD) return genConstraint(stage, used, 'medium', rampWords, prev);
+  if (pool === MEDIUM) return genConstraint(stage, used, 'easy', rampWords, prev);
   return { req: [pickFrom('east')] };
 }
 

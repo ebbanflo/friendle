@@ -457,6 +457,37 @@ test.describe('tower mode', () => {
     expect(countRecognizable({ ban: ['a', 'e', 'i', 'o', 'u'], uniq: true })).toBeLessThan(30); // the obscure shape we cut
   });
 
+  test('a decree never repeats back-to-back (no getting stuck on the same rule)', () => {
+    // pass each decree as `prev` into the next, exactly like the engine does at
+    // a stage bump - the new decree must never be the SAME rule twice running,
+    // for every difficulty, over a long game (deterministic decrees like NO
+    // VOWELS / FIRST+LAST MATCH are the ones that could otherwise repeat).
+    for (const difficulty of ['easy', 'medium', 'hard', 'ramp']) {
+      const used = new Set();
+      let prev = null;
+      let prevDesc = null;
+      for (let stage = 1; stage <= 150; stage++) {
+        const c = genConstraint(stage, used, difficulty, 5, prev);
+        const desc = describeConstraint(c);
+        expect(desc).not.toBe(prevDesc); // <- the whole point: no immediate repeat
+        prev = c;
+        prevDesc = desc;
+        let taken = 0;
+        for (const w of GUESSES) {
+          if (taken >= 5) break;
+          if (!used.has(w) && matchesConstraint(w, c)) { used.add(w); taken += 1; }
+        }
+      }
+    }
+    // and it still refuses an exact repeat even when asked point-blank: feeding
+    // NO VOWELS as prev never yields NO VOWELS again
+    const noVowels = { ban: ['a', 'e', 'i', 'o', 'u'] };
+    for (let i = 0; i < 30; i++) {
+      const c = genConstraint(9, new Set(), 'hard', 5, noVowels);
+      expect(describeConstraint(c)).not.toBe('NO VOWELS');
+    }
+  });
+
   test('describeConstraint reads naturally: starts-with / ends-in / vowel counts', () => {
     expect(describeConstraint({ reqAt: [{ i: 0, ch: 's' }] })).toBe('STARTS WITH S');
     expect(describeConstraint({ reqAt: [{ i: 4, ch: 't' }] })).toBe('ENDS IN T');
